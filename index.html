@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Predictor matemático para el Mundial FIFA 2026. ELO, Poisson, Dixon-Coles y Monte Carlo.">
+    <title>⚽ Predictor Mundial 2026</title>
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="bg-effects"><div class="bg-orb"></div><div class="bg-orb"></div><div class="bg-orb"></div></div>
+    <div class="bg-grid"></div>
+
+    <div class="app-container">
+        <!-- HERO -->
+        <header class="hero">
+            <div class="hero-badge"><span class="pulse-dot"></span> Algoritmo en vivo — Datos Junio 2026</div>
+            <h1>Predictor Mundial 2026</h1>
+            <p>Motor matemático: ELO · Poisson · Dixon-Coles · Monte Carlo · Tanda de Penales</p>
+            <div class="hero-flags"><span>🇺🇸</span><span>🇲🇽</span><span>🇨🇦</span></div>
+        </header>
+
+        <!-- TABS -->
+        <nav class="nav-tabs" id="navTabs">
+            <button class="nav-tab active" data-tab="predictor">⚡ Predictor</button>
+            <button class="nav-tab" data-tab="favorites">🏆 Favoritos</button>
+            <button class="nav-tab" data-tab="groups">📊 Grupos</button>
+            <button class="nav-tab" data-tab="simulation">🎲 Simulación</button>
+
+            <button class="nav-tab" data-tab="methodology">🧮 Metodología</button>
+        </nav>
+
+        <!-- PREDICTOR -->
+        <section class="section active" id="section-predictor">
+            <h2 class="section-title"><span class="icon">⚡</span> Predicción de Partido</h2>
+            <div class="glass-card">
+                <div class="predictor-container">
+                    <div class="team-selector">
+                        <label>Selección A</label>
+                        <select id="teamA-select"></select>
+                        <div class="team-flag-display" id="flagA">🏳️</div>
+                        <div class="team-name-display" id="nameA">—</div>
+                        <div class="team-rank-display" id="rankA"></div>
+                    </div>
+                    <div class="vs-badge">VS</div>
+                    <div class="team-selector">
+                        <label>Selección B</label>
+                        <select id="teamB-select"></select>
+                        <div class="team-flag-display" id="flagB">🏳️</div>
+                        <div class="team-name-display" id="nameB">—</div>
+                        <div class="team-rank-display" id="rankB"></div>
+                    </div>
+                </div>
+                <div style="display:flex;gap:1rem;margin-top:1rem">
+                    <button class="predict-btn" id="predictBtn" style="flex:1">🔮 Ejecutar Predicción Matemática</button>
+                    <button class="predict-btn" id="shareBtn" style="flex:0;min-width:50px;background:var(--bg-glass)" title="Copiar enlace para compartir">🔗</button>
+                </div>
+            </div>
+            <div class="prediction-results" id="predictionResults">
+                <div class="prob-bars" id="probBars"></div>
+                <div class="likely-score" id="likelyScoreContainer"></div>
+                <div class="stats-grid" id="statsGrid"></div>
+                <div class="glass-card" style="margin-top:1.5rem"><h3>📊 Comparación Detallada</h3><div id="comparisonGrid"></div></div>
+                <div class="glass-card" style="margin-top:1.5rem"><div class="top-scores"><h3>🎯 Top 5 Marcadores Probables</h3><div id="topScoresContainer"></div></div></div>
+                <div class="players-section"><h3>⭐ Convocatoria Completa</h3><div class="players-grid" id="playersGrid"></div></div>
+            </div>
+        </section>
+
+        <!-- FAVORITOS -->
+        <section class="section" id="section-favorites">
+            <h2 class="section-title"><span class="icon">🏆</span> Ranking de Favoritos</h2>
+            <p style="color:var(--text-muted);font-size:0.8rem;margin-bottom:1rem">Haz clic en cualquier selección para llevarla al predictor</p>
+            <div class="favorites-grid" id="favoritesGrid"></div>
+        </section>
+
+        <!-- GRUPOS -->
+        <section class="section" id="section-groups">
+            <h2 class="section-title"><span class="icon">📊</span> Fase de Grupos — Predicción</h2>
+            <div class="groups-grid" id="groupsGrid"></div>
+        </section>
+
+        <!-- SIMULACIÓN -->
+        <section class="section" id="section-simulation">
+            <h2 class="section-title"><span class="icon">🎲</span> Simulación Monte Carlo</h2>
+            <p style="color:var(--text-secondary);font-size:0.85rem;margin-bottom:1.5rem">Simula el torneo completo miles de veces para estimar la probabilidad de cada selección de llegar a cada ronda.</p>
+            <div class="simulation-controls">
+                <select id="simIterations">
+                    <option value="500">500 simulaciones (rápido)</option>
+                    <option value="1000">1,000 simulaciones</option>
+                    <option value="3000">3,000 simulaciones</option>
+                    <option value="10000" selected>10,000 simulaciones (preciso)</option>
+                    <option value="20000">20,000 simulaciones (muy preciso)</option>
+                    <option value="50000">50,000 simulaciones (profesional)</option>
+                    <option value="100000">100,000 simulaciones (extremo)</option>
+                </select>
+                <button class="simulate-btn" id="simulateBtn">🎲 Ejecutar Simulación</button>
+            </div>
+            <div class="simulation-progress" id="simProgress">
+                <div class="spinner"></div>
+                <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+                <div class="progress-text" id="progressText"></div>
+            </div>
+            <div class="sim-results" id="simResults">
+                <div class="sim-table-container">
+                    <table class="sim-table">
+                        <thead>
+                            <tr>
+                                <th>#</th><th>🏳</th><th>Selección</th>
+                                <th>🏆 Campeón</th><th>Final</th><th>Semifinal</th>
+                                <th>Cuartos</th><th>Octavos</th><th>Ronda 32</th><th>Pts Prom.</th>
+                            </tr>
+                        </thead>
+                        <tbody id="simTableBody"></tbody>
+                    </table>
+                </div>
+                <div id="simBracket" style="margin-top:2rem;display:none;" class="glass-card"></div>
+            </div>
+        </section>
+
+
+        <!-- METODOLOGÍA -->
+        <section class="section" id="section-methodology">
+            <h2 class="section-title"><span class="icon">🧮</span> Metodología del Algoritmo</h2>
+
+            <div class="glass-card" style="margin-bottom:1.5rem">
+                <h3 style="font-family:'Outfit',sans-serif;color:var(--accent-primary-light);margin-bottom:1rem">1. Sistema ELO Adaptado</h3>
+                <p style="color:var(--text-secondary);margin-bottom:0.75rem">Cada selección tiene un ELO histórico. La probabilidad esperada de victoria se calcula con:</p>
+                <div style="background:var(--bg-secondary);padding:1rem;border-radius:12px;font-family:monospace;color:var(--accent-primary-light);font-size:0.9rem">
+                    P(A gana) = 1 / (1 + 10<sup>-(ELO_A - ELO_B)/400</sup>)<br><br>
+                    Bonus anfitrión: +30 ELO para USA, México y Canadá<br>
+                    (reducido de valores mayores para no inflar sus chances)
+                </div>
+            </div>
+
+            <div class="glass-card" style="margin-bottom:1.5rem">
+                <h3 style="font-family:'Outfit',sans-serif;color:var(--accent-emerald);margin-bottom:1rem">2. Lambda (Goles Esperados) — Modelo Calibrado</h3>
+                <p style="color:var(--text-secondary);margin-bottom:0.75rem">El número de goles esperados se deriva del ELO con ajustes pequeños:</p>
+                <div style="background:var(--bg-secondary);padding:1rem;border-radius:12px;font-family:monospace;color:var(--accent-emerald);font-size:0.9rem">
+                    λA = 2 × 1.20 × P(A gana)  → rango ~0.30 a 2.80<br>
+                    λB = 2 × 1.20 × P(B gana)  → complementario<br><br>
+                    + Ajuste forma  (±12% máx)<br>
+                    + Ajuste stats  (±10% máx)<br>
+                    + Ajuste plantilla (±6% máx)
+                </div>
+            </div>
+
+            <div class="glass-card" style="margin-bottom:1.5rem">
+                <h3 style="font-family:'Outfit',sans-serif;color:var(--accent-gold);margin-bottom:1rem">3. Distribución de Poisson + Corrección Dixon-Coles</h3>
+                <div style="background:var(--bg-secondary);padding:1rem;border-radius:12px;font-family:monospace;color:var(--accent-gold);font-size:0.9rem">
+                    P(k goles; λ) = (λ<sup>k</sup> × e<sup>-λ</sup>) / k!<br><br>
+                    Corrección para marcadores bajos (ρ = -0.08):<br>
+                    0-0: × (1 - λA×λB×ρ) | 1-0: × (1 + λB×ρ)<br>
+                    0-1: × (1 + λA×ρ)    | 1-1: × (1 - ρ)
+                </div>
+            </div>
+
+            <div class="glass-card" style="margin-bottom:1.5rem">
+                <h3 style="font-family:'Outfit',sans-serif;color:var(--accent-rose);margin-bottom:1rem">4. Índice de Fuerza Compuesta (Ranking)</h3>
+                <div style="background:var(--bg-secondary);padding:1rem;border-radius:12px;">
+                    <table style="width:100%;border-collapse:collapse;font-size:0.85rem;">
+                        <tr style="border-bottom:1px solid var(--border-glass)"><td style="padding:6px;color:var(--text-secondary)">Rating ELO (normalizado)</td><td style="text-align:right;font-weight:700;color:var(--accent-rose)">40%</td></tr>
+                        <tr style="border-bottom:1px solid var(--border-glass)"><td style="padding:6px;color:var(--text-secondary)">Forma reciente</td><td style="text-align:right;font-weight:700;color:var(--accent-rose)">20%</td></tr>
+                        <tr style="border-bottom:1px solid var(--border-glass)"><td style="padding:6px;color:var(--text-secondary)">Stats de equipo (goles, defensa, penales)</td><td style="text-align:right;font-weight:700;color:var(--accent-rose)">15%</td></tr>
+                        <tr style="border-bottom:1px solid var(--border-glass)"><td style="padding:6px;color:var(--text-secondary)">Valor de plantilla</td><td style="text-align:right;font-weight:700;color:var(--accent-rose)">10%</td></tr>
+                        <tr style="border-bottom:1px solid var(--border-glass)"><td style="padding:6px;color:var(--text-secondary)">Historial mundialista</td><td style="text-align:right;font-weight:700;color:var(--accent-rose)">8%</td></tr>
+                        <tr style="border-bottom:1px solid var(--border-glass)"><td style="padding:6px;color:var(--text-secondary)">Fuerza de confederación</td><td style="text-align:right;font-weight:700;color:var(--accent-rose)">4%</td></tr>
+                        <tr><td style="padding:6px;color:var(--text-secondary)">Experiencia en torneos</td><td style="text-align:right;font-weight:700;color:var(--accent-rose)">3%</td></tr>
+                    </table>
+                </div>
+            </div>
+
+            <div class="glass-card">
+                <h3 style="font-family:'Outfit',sans-serif;color:var(--accent-violet);margin-bottom:1rem">5. Simulación Monte Carlo del Torneo</h3>
+                <p style="color:var(--text-secondary)">Cada iteración simula el torneo completo desde fase de grupos hasta la final, generando goles aleatorios con distribución de Poisson. Se acumulan 500–10,000 iteraciones para estimar probabilidades por ronda. El error estándar con 10,000 iteraciones es <strong style="color:var(--accent-violet)">&lt;0.5%</strong>.</p>
+            </div>
+        </section>
+
+        <footer class="app-footer">
+            <p>⚽ Predictor Mundial 2026 — ELO · Poisson · Dixon-Coles · Monte Carlo</p>
+            <p style="margin-top:0.4rem;font-size:0.72rem;color:var(--text-muted)">Las predicciones son estimaciones estadísticas. El fútbol es impredecible. 🎲</p>
+        </footer>
+    </div>
+
+
+    <script src="engine.js"></script>
+    <script src="app.js"></script>
+
+</body>
+</html>
