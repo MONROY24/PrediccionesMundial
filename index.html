@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Predictor matemático para el Mundial FIFA 2026. ELO, Poisson, Dixon-Coles y Monte Carlo.">
+    <title>⚽ Predictor Mundial 2026</title>
+    <link rel="icon" type="image/png" href="MR24.png?v=2">
+    <link rel="shortcut icon" type="image/png" href="MR24.png?v=2">
+    <link rel="stylesheet" href="styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <style>
+        select option {
+            background-color: #0f172a;
+            color: #ffffff;
+            padding: 10px;
+        }
+    </style>
+</head>
+<body>
+    <button id="globalExportBtn" style="position:fixed; bottom:25px; right:25px; z-index:9999; border-radius:50px; padding:12px 24px; box-shadow:0 10px 25px rgba(0,0,0,0.5); font-weight:bold; background:var(--gradient-hero); color:white; border:none; cursor:pointer; font-family:'Outfit', sans-serif; display:flex; align-items:center; gap:8px; transition:transform 0.2s;">📸 Exportar a PNG</button>
+    <div class="bg-effects"><div class="bg-orb"></div><div class="bg-orb"></div><div class="bg-orb"></div></div>
+    <div class="bg-grid"></div>
+
+    <div class="app-container">
+        <!-- HERO -->
+        <header class="hero">
+            <div class="hero-badge"><span class="pulse-dot"></span> Algoritmo en vivo — Datos 25/26</div>
+            <h1>Predictor Mundial 2026</h1>
+            <p>Motor matemático: ELO · Poisson · Dixon-Coles · Monte Carlo · Tanda de Penales</p>
+            <div class="hero-flags" id="heroFlags" style="display:flex; justify-content:center; gap:15px; margin-top:15px;"></div>
+        </header>
+
+        <!-- TABS -->
+        <nav class="nav-tabs" id="navTabs">
+            <button class="nav-tab active" data-tab="predictor">⚡ Predictor</button>
+            <button class="nav-tab" data-tab="favorites">🏆 Favoritos</button>
+            <button class="nav-tab" data-tab="groups">📊 Grupos</button>
+            <button class="nav-tab" data-tab="simulation">🎲 Simulación</button>
+
+            <button class="nav-tab" data-tab="methodology">🧮 Metodología</button>
+        </nav>
+
+        <!-- PREDICTOR -->
+        <section class="section active" id="section-predictor">
+            <h2 class="section-title"><span class="icon">⚡</span> Predicción de Partido</h2>
+            <div class="glass-card">
+                <div class="predictor-container">
+                    <div class="team-selector">
+                        <label>Selección A</label>
+                        <select id="teamA-select"></select>
+                        <div class="team-flag-display" id="flagA">🏳️</div>
+                        <div class="team-name-display" id="nameA">—</div>
+                        <div class="team-rank-display" id="rankA"></div>
+                    </div>
+                    <div class="vs-badge">VS</div>
+                    <div class="team-selector">
+                        <label>Selección B</label>
+                        <select id="teamB-select"></select>
+                        <div class="team-flag-display" id="flagB">🏳️</div>
+                        <div class="team-name-display" id="nameB">—</div>
+                        <div class="team-rank-display" id="rankB"></div>
+                    </div>
+                </div>
+                <div style="margin-top: 1.5rem; background: var(--bg-primary); border: 1px solid var(--border-glass); border-radius: 8px; padding: 1.2rem; box-shadow: inset 0 2px 5px rgba(0,0,0,0.2);">
+                    <label style="display:block; color:var(--text-secondary); margin-bottom:0.5rem; font-size:0.85rem; font-weight:bold; text-transform:uppercase; letter-spacing:1px;">Lente Predictivo (Modelo Matemático)</label>
+                    <select id="singleMatchModel" style="width:100%; background:var(--bg-glass); border:1px solid var(--accent-gold); color:white; padding:10px; border-radius:6px; font-weight:bold; outline:none; cursor:pointer;">
+                        <option value="standard" selected>🌟 Poisson Dixon-Coles (Equilibrado)</option>
+                        <option value="pure_elo">🧮 Pure ELO (Ranking Histórico)</option>
+                        <option value="momentum">🔥 Hot-Hand (Momento de Forma)</option>
+                        <option value="economic">💰 Economic Power (Valor de Plantilla)</option>
+                        <option value="defensive">🛡️ Defensive Matrix (Táctico Defensivo)</option>
+                    </select>
+                    <div id="singleMatchModelDesc" style="margin-top: 0.8rem; font-size: 0.85rem; color: var(--text-muted); line-height: 1.4; border-left: 3px solid var(--accent-gold); padding-left: 10px; font-style:italic;">
+                        El estándar de la industria. Combina historia (ELO), calidad de jugadores y rachas recientes. Es el modelo más realista y equilibrado.
+                    </div>
+                </div>
+                <div style="display:flex;gap:1rem;margin-top:1.5rem">
+                    <button class="predict-btn" id="predictBtn" style="flex:1">🔮 Ejecutar Predicción Matemática</button>
+                    <button class="predict-btn" id="shareBtn" style="flex:0;min-width:50px;background:var(--bg-glass)" title="Copiar enlace para compartir">🔗</button>
+                    <button class="predict-btn" id="exportBtn" style="flex:0;min-width:50px;background:var(--bg-glass)" title="Descargar predicción como imagen">📸</button>
+                </div>
+            </div>
+            <div class="prediction-results" id="predictionResults">
+                <div class="prob-bars" id="probBars"></div>
+                <div class="likely-score" id="likelyScoreContainer"></div>
+                <div class="stats-grid" id="statsGrid"></div>
+                <div class="glass-card" style="margin-top:1.5rem"><h3>📊 Comparación Detallada</h3><div id="comparisonGrid"></div></div>
+                <div class="glass-card" style="margin-top:1.5rem"><div class="top-scores"><h3>🎯 Top 5 Marcadores Probables</h3><div id="topScoresContainer"></div></div></div>
+                <div class="players-section"><h3>⭐ Convocatoria Completa</h3><div class="players-grid" id="playersGrid"></div></div>
+            </div>
+        </section>
+
+        <!-- FAVORITOS -->
+        <section class="section" id="section-favorites">
+            <h2 class="section-title"><span class="icon">🏆</span> Ranking de Favoritos</h2>
+            <p style="color:var(--text-muted);font-size:0.8rem;margin-bottom:1rem">Haz clic en cualquier selección para llevarla al predictor</p>
+            <div class="favorites-grid" id="favoritesGrid"></div>
+        </section>
+
+        <!-- GRUPOS -->
+        <section class="section" id="section-groups">
+            <h2 class="section-title"><span class="icon">📊</span> Fase de Grupos — Predicción</h2>
+            <div class="groups-grid" id="groupsGrid"></div>
+        </section>
+
+        <!-- SIMULACIÓN -->
+        <section class="section" id="section-simulation">
+            <h2 class="section-title" style="text-align:center;"><span class="icon">🎲</span> Simulación Monte Carlo</h2>
+            <p style="text-align:center; color:var(--text-secondary); font-size:0.9rem; margin-bottom:2rem; max-width:600px; margin-left:auto; margin-right:auto;">
+                Simula el torneo completo miles de veces de forma paralela para estimar la probabilidad matemática de que cada selección llegue a fases finales.
+            </p>
+            
+            <div class="simulation-controls" style="display:flex; flex-direction:column; align-items:center; gap:20px; background:var(--bg-glass); padding:30px; border-radius:16px; margin-bottom: 2rem; box-shadow:var(--shadow-md);">
+                <div style="width:100%; max-width:400px; display:flex; flex-direction:column; gap:15px;">
+                    <select id="simModel" style="width:100%; background:var(--bg-primary); border:1px solid var(--border-glass); color:white; padding:12px; border-radius:8px;">
+                        <option value="standard" selected>🌟 Poisson Dixon-Coles (Estándar de la Industria)</option>
+                        <option value="pure_elo">🧮 Pure ELO (Matemático Estricto)</option>
+                        <option value="momentum">🔥 Hot-Hand Momentum (Enfoque de Rachas)</option>
+                        <option value="economic">💰 Economic Power (Fuerza de Plantilla)</option>
+                        <option value="defensive">🛡️ Defensive Matrix (Enfoque Defensivo / Underdog)</option>
+                    </select>
+                    <select id="simIterations" style="width:100%; background:var(--bg-primary); border:1px solid var(--border-glass); color:white; padding:12px; border-radius:8px;">
+                        <option value="500">500 simulaciones (Demostración)</option>
+                        <option value="1000">1,000 simulaciones</option>
+                        <option value="3000">3,000 simulaciones</option>
+                        <option value="10000" selected>10,000 simulaciones (Preciso)</option>
+                        <option value="20000">20,000 simulaciones</option>
+                        <option value="50000">50,000 simulaciones</option>
+                        <option value="100000">100,000 simulaciones</option>
+                        <option value="200000">200,000 simulaciones</option>
+                        <option value="250000">250,000 simulaciones</option>
+                        <option value="300000">300,000 simulaciones</option>
+                        <option value="400000">400,000 simulaciones</option>
+                        <option value="500000">500,000 simulaciones</option>
+                        <option value="1000000">1,000,000 simulaciones (Precisión Extrema)</option>
+                    </select>
+                </div>
+                <button class="simulate-btn" id="simulateBtn" style="width:100%; max-width:400px; padding:15px; font-size:1.1rem;">🎲 Ejecutar Simulación Paralela</button>
+            </div>
+            <div class="simulation-progress" id="simProgress">
+                <div class="spinner"></div>
+                <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+                <div class="progress-text" id="progressText"></div>
+            </div>
+            <div class="sim-results" id="simResults">
+                <div class="sim-table-container">
+                    <table class="sim-table">
+                        <thead>
+                            <tr>
+                                <th>#</th><th>🏳</th><th>Selección</th>
+                                <th>🏆 Campeón</th><th>Final</th><th>Semifinal</th>
+                                <th>Cuartos</th><th>Octavos</th><th>Ronda 32</th><th>Pts Prom.</th>
+                            </tr>
+                        </thead>
+                        <tbody id="simTableBody"></tbody>
+                    </table>
+                </div>
+                <div id="simBracket" style="margin-top:2rem;display:none;" class="glass-card"></div>
+            </div>
+        </section>
+
+
+        <!-- METODOLOGÍA -->
+        <section class="section" id="section-methodology">
+            <h2 class="section-title"><span class="icon">🧮</span> Metodología del Modelo Predictivo</h2>
+            
+            <div class="glass-card" style="margin-bottom:2rem; padding:30px; font-size:0.95rem; line-height:1.7; color:var(--text-primary);">
+                <p style="margin-bottom:1.5rem;">El <strong>Predictor Mundial 2026</strong> utiliza un modelo estocástico avanzado basado en métricas reales de rendimiento deportivo. La arquitectura matemática se compone de cuatro pilares fundamentales diseñados para simular distribuciones de probabilidad realistas en torneos internacionales.</p>
+                
+                <h3 style="color:var(--accent-primary-light); margin-top:2rem; margin-bottom:1rem; font-size:1.1rem; border-bottom:1px solid var(--border-glass); padding-bottom:5px;">1. Sistema ELO Ponderado</h3>
+                <p style="margin-bottom:1.5rem;">La fuerza base de cada selección se determina mediante un sistema ELO adaptativo. A diferencia de rankings estáticos, el ELO se recalcula considerando el <strong>estado de forma reciente</strong> (últimos partidos), el <strong>valor de la plantilla</strong> en el mercado y métricas de ataque/defensa. Los países anfitriones (Estados Unidos, México y Canadá) reciben un bonificador estadístico por localía (+30 puntos ELO) para reflejar su ventaja de local comprobada empíricamente.</p>
+
+                <h3 style="color:var(--accent-primary-light); margin-top:2rem; margin-bottom:1rem; font-size:1.1rem; border-bottom:1px solid var(--border-glass); padding-bottom:5px;">2. Generación de Goles Esperados (λ)</h3>
+                <p style="margin-bottom:1.5rem;">Utilizando la diferencia de fuerza ELO entre dos equipos, el modelo calcula la probabilidad de victoria y extrae el <strong>parámetro Lambda (λ)</strong>, que representa los goles esperados para cada equipo en un periodo de 90 minutos. Estos lambdas son calibrados mediante coeficientes defensivos y ofensivos históricos de cada selección.</p>
+
+                <h3 style="color:var(--accent-primary-light); margin-top:2rem; margin-bottom:1rem; font-size:1.1rem; border-bottom:1px solid var(--border-glass); padding-bottom:5px;">3. Distribución Bivariada de Poisson con Corrección Dixon-Coles</h3>
+                <p style="margin-bottom:1.5rem;">Sabiendo el valor λ de ambos equipos, se simula la matriz de posibles marcadores (desde 0-0 hasta 8-8) utilizando una distribución de probabilidad de Poisson. Posteriormente, se aplica la corrección matemática de <strong>Dixon-Coles (1997)</strong>, la cual ajusta empíricamente la frecuencia de marcadores de baja puntuación (como el 0-0, 1-0 o 1-1) para evitar la subestimación natural del modelo de Poisson en los empates del fútbol profesional.</p>
+
+                <h3 style="color:var(--accent-primary-light); margin-top:2rem; margin-bottom:1rem; font-size:1.1rem; border-bottom:1px solid var(--border-glass); padding-bottom:5px;">4. Simulación Estocástica de Monte Carlo</h3>
+                <p style="margin-bottom:1.5rem;">Para el torneo completo, el motor ejecuta hasta <strong>1,000,000 iteraciones</strong> del Mundial entero utilizando el algoritmo anterior. En fases de eliminación directa, si la distribución predice un empate, se dispara el motor secundario de <strong>Tandas de Penales</strong>, el cual toma en cuenta un "Penalty Rating" interno de los cobradores de élite bajo estrés. Al finalizar las simulaciones, la convergencia estadística (Ley de los Grandes Números) revela las probabilidades precisas de cada selección de avanzar de ronda.</p>
+
+                <h3 style="color:var(--accent-primary-light); margin-top:2rem; margin-bottom:1rem; font-size:1.1rem; border-bottom:1px solid var(--border-glass); padding-bottom:5px;">5. Lentes Predictivos Multi-Modelo</h3>
+                <p style="margin-bottom:1.5rem;">La arquitectura permite filtrar la simulación a través de cinco enfoques estocásticos distintos:
+                <ul style="margin-left: 20px; margin-bottom: 1.5rem; line-height: 1.7; color: var(--text-secondary);">
+                    <li><strong style="color:white;">🌟 Estándar (Dixon-Coles):</strong> Modelo balanceado (ELO + Mercado + Rachas).</li>
+                    <li><strong style="color:white;">🧮 Pure ELO:</strong> Algoritmo estricto basado en jerarquía histórica pura.</li>
+                    <li><strong style="color:white;">🔥 Hot-Hand Momentum:</strong> Exagera la racha invicta para simular "Caballos Negros".</li>
+                    <li><strong style="color:white;">💰 Economic Power:</strong> Probabilidades dictadas estrictamente por el valor en euros (€) de la plantilla.</li>
+                    <li><strong style="color:white;">🛡️ Defensive Matrix:</strong> Suprime la tasa global de goleo y bonifica los esquemas tácticos defensivos.</li>
+                </ul>
+                </p>
+            </div>
+        </section>
+
+        <footer class="app-footer" style="display:flex; flex-direction:row; justify-content:space-between; align-items:center; padding: 40px 30px; margin-top: 50px; border-top: 1px solid var(--border-glass); background:var(--bg-glass); border-radius:16px; box-shadow:var(--shadow-md); flex-wrap: wrap;">
+            <div style="flex: 1; text-align: left; min-width: 250px;">
+                <p style="font-size: 1.15rem; color: var(--text-primary); margin:0; font-weight: 600;">Desarrollado por <strong style="color:var(--accent-primary-light);">MR24</strong></p>
+                <p style="font-size: 0.9rem; color: var(--text-muted); margin:0; margin-top:5px;">© 2026 Predictor Mundial</p>
+            </div>
+            
+            <div style="flex: 1; display:flex; justify-content:center; min-width: 150px; margin: 15px 0;">
+                <img src="MR24.png" alt="MR24 Logo" onerror="this.style.display='none'" style="width: 110px; height: 110px; border-radius: 20px; object-fit:cover; filter: drop-shadow(0 6px 15px rgba(0,0,0,0.8)); border: 3px solid var(--border-glass); transition: transform 0.3s ease;">
+            </div>
+            
+            <div style="flex: 1; text-align: right; min-width: 250px; font-size: 0.9rem; color: var(--text-muted); font-family: 'Outfit', sans-serif; opacity: 0.8;">
+                <span style="font-weight:bold; color:var(--text-secondary);">Motor Matemático</span><br>
+                ELO · Poisson · Monte Carlo
+            </div>
+        </footer>
+    </div>
+
+
+    <script src="engine.js"></script>
+    <script src="app.js"></script>
+
+</body>
+</html>

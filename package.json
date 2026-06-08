@@ -1,0 +1,12 @@
+{
+  "name": "predictor-mundial-2026",
+  "version": "1.0.0",
+  "description": "Algoritmo matemático predictivo para el Mundial FIFA 2026",
+  "private": true,
+  "scripts": {
+    "start": "npx serve . -l 3000",
+    "dev": "npx serve . -l 3000 --cors"
+  },
+  "keywords": ["mundial", "2026", "futbol", "prediccion", "elo", "poisson"],
+  "license": "MIT"
+}
