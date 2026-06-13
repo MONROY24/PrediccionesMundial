@@ -12,12 +12,24 @@
     "test:analyze": "node -e \"const https=require('https');console.log('api/analyze.js syntax check OK');require('./api/analyze.js');\"",
     "build": "echo 'No build step required — static HTML/JS + Vercel Serverless Functions' && npm run test:engine"
   },
-  "keywords": ["mundial", "2026", "futbol", "prediccion", "elo", "poisson", "gemini", "ia"],
+  "keywords": [
+    "mundial",
+    "2026",
+    "futbol",
+    "prediccion",
+    "elo",
+    "poisson",
+    "gemini",
+    "ia"
+  ],
   "license": "MIT",
   "engines": {
     "node": ">=18.0.0"
   },
   "optionalDependencies": {
     "@vercel/kv": "^1.0.0"
+  },
+  "devDependencies": {
+    "@vercel/node": "^5.8.17"
   }
 }
