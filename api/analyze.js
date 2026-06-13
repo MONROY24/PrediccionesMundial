@@ -11,7 +11,7 @@
 const https = require('https');
 
 // Modelo Gemini — gemini-2.0-flash: rápido, gratuito, multilingüe
-const GEMINI_MODEL = 'gemini-2.0-flash';
+const GEMINI_MODEL = 'gemini-2.5-flash';
 
 // Cache en memoria para evitar llamadas duplicadas por el mismo partido
 // (Se reinicia en cada cold start del serverless function)
