@@ -1477,19 +1477,32 @@ function renderAIAnalysis(data) {
     const dataA = WORLD_CUP_DATA?.teams[teamA];
     const dataB = WORLD_CUP_DATA?.teams[teamB];
 
-    // Convertir markdown básico a HTML
+    // Convertir markdown básico a HTML (versión segura)
     const mdToHtml = (text) => {
         if (!text) return '';
-        return text
-            .replace(/^## (.+)$/gm, '<h3 class="ai-section-h">$1</h3>')
-            .replace(/^### (.+)$/gm, '<h4 class="ai-section-h4">$1</h4>')
-            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-            .replace(/\*(.+?)\*/g, '<em>$1</em>')
-            .replace(/^- (.+)$/gm, '<li>$1</li>')
-            .replace(/(<li>.*<\/li>\n?)+/g, '<ul class="ai-list">$&</ul>')
-            .replace(/\n\n/g, '</p><p class="ai-para">')
-            .replace(/^(?!<[hul])(.+)$/gm, '<p class="ai-para">$1</p>')
-            .replace(/<p class="ai-para"><\/p>/g, '');
+        let html = text.replace(/\r\n/g, '\n');
+        
+        html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+        html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
+        
+        html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
+        html = html.replace(/(<li>.*<\/li>\n?)+/g, '<ul class="ai-list">$&</ul>');
+        
+        html = html.replace(/^### (.+)$/gm, '<h4 class="ai-section-h4">$1</h4>');
+        html = html.replace(/^## (.+)$/gm, '<h3 class="ai-section-h">$1</h3>');
+        
+        // Separar por bloques y añadir <p> de forma segura
+        html = html.split(/\n\n+/).map(block => {
+            block = block.trim();
+            if (!block) return '';
+            // Si el bloque ya es un HTML block element, no lo envolvemos en p
+            if (block.startsWith('<h') || block.startsWith('<ul')) {
+                return block;
+            }
+            return `<p class="ai-para">${block.replace(/\n/g, '<br>')}</p>`;
+        }).join('\n');
+        
+        return html;
     };
 
     const timeStr = generatedAt ? new Date(generatedAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : '';

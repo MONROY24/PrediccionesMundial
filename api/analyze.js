@@ -10,8 +10,8 @@
 
 const https = require('https');
 
-// Modelo Gemini — gemini-2.5-flash: requerido por nuevas políticas Google AI Studio
-const GEMINI_MODEL = 'gemini-2.5-flash';
+// Modelo Gemini — Usando versión estable 1.5-flash
+const GEMINI_MODEL = 'gemini-1.5-flash';
 
 // Cache en memoria para evitar llamadas duplicadas por el mismo partido
 // (Se reinicia en cada cold start del serverless function)
@@ -55,19 +55,20 @@ MARCADORES PROBABLES: ${topScoresText}
 Over 2.5: ${over25}% | BTTS: ${btts}% | ELO: ${eloDiffText}${contextText}
 
 Responde EXACTAMENTE con estas 4 secciones (máximo 380 palabras en total):
+Responde STRICTAMENTE usando este formato markdown (NO agregues introducciones largas, ve directo a las secciones):
 
 ## 📋 Contexto del Partido
-[2 párrafos cortos: rivalidad histórica y qué está en juego en el Mundial 2026]
+[2 párrafos: rivalidad histórica y qué está en juego]
 
 ## ⚖️ Análisis de Fuerzas
-**${teamA}:** [2 fortalezas clave] | [1 debilidad principal]
-**${teamB}:** [2 fortalezas clave] | [1 debilidad principal]
+**${teamA}:** [2 fortalezas] | [1 debilidad]
+**${teamB}:** [2 fortalezas] | [1 debilidad]
 
 ## 🔢 Por Qué Estas Probabilidades
-[1 párrafo: explica los % y los λ de Poisson de forma accesible]
+[1 párrafo explicando los % y goles esperados]
 
 ## 🏆 Veredicto Final
-[1 párrafo contundente con predicción y marcador más probable]`;
+[1 párrafo con predicción y marcador]`;
 }
 
 /**
