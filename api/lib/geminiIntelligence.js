@@ -1,4 +1,4 @@
-const GEMINI_MODEL = 'gemini-2.5-flash';
+const GEMINI_MODEL = 'gemini-1.5-flash';
 
 // Simple memory cache para minimizar llamadas repetidas durante una sesión (Vercel Free)
 const intelligenceCache = {};

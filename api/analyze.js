@@ -2,8 +2,8 @@ export const config = {
     runtime: 'edge',
 };
 
-// Modelo Gemini — gemini-2.5-flash: requerido por la API Key del usuario
-const GEMINI_MODEL = 'gemini-2.5-flash';
+// Modelo Gemini — gemini-1.5-flash: requerido por la API Key del usuario
+const GEMINI_MODEL = 'gemini-1.5-flash';
 
 function buildPrompt(teamA, teamB, prediction, contextualFactors = {}) {
     const { winA, draw, winB, mostLikelyScore, lambdaA, lambdaB,
