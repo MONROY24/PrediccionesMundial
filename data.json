@@ -325,7 +325,18 @@
                 "avgGoalsConceded": 1.1,
                 "avgPenaltyRating": 68.3
             },
-            "hostCountry": "México"
+            "hostCountry": "México",
+            "tactics": {
+                "possession": 61.5,
+                "counterAttack": 39.5,
+                "pressing": 48.5,
+                "defensiveBlock": 51.5,
+                "aerialStrength": 70.5
+            },
+            "expectedGoals": {
+                "xG": 1.93,
+                "xGA": 0.78
+            }
         },
         "Sudáfrica": {
             "confederation": "CAF",
@@ -562,6 +573,17 @@
                 "avgGoalsScored": 1.2,
                 "avgGoalsConceded": 1.6,
                 "avgPenaltyRating": 60.2
+            },
+            "tactics": {
+                "possession": 40,
+                "counterAttack": 62,
+                "pressing": 29,
+                "defensiveBlock": 70,
+                "aerialStrength": 54
+            },
+            "expectedGoals": {
+                "xG": 1.17,
+                "xGA": 1.53
             }
         },
         "Corea del Sur": {
@@ -799,6 +821,17 @@
                 "avgGoalsScored": 1.65,
                 "avgGoalsConceded": 1.2,
                 "avgPenaltyRating": 68.5
+            },
+            "tactics": {
+                "possession": 57,
+                "counterAttack": 51,
+                "pressing": 53,
+                "defensiveBlock": 46,
+                "aerialStrength": 63
+            },
+            "expectedGoals": {
+                "xG": 1.8,
+                "xGA": 0.9
             }
         },
         "República Checa": {
@@ -1036,6 +1069,17 @@
                 "avgGoalsScored": 1.5,
                 "avgGoalsConceded": 1.3,
                 "avgPenaltyRating": 69.8
+            },
+            "tactics": {
+                "possession": 48,
+                "counterAttack": 42,
+                "pressing": 61,
+                "defensiveBlock": 42,
+                "aerialStrength": 43
+            },
+            "expectedGoals": {
+                "xG": 1.62,
+                "xGA": 1.08
             }
         },
         "Canadá": {
@@ -1274,7 +1318,18 @@
                 "avgGoalsConceded": 1.4,
                 "avgPenaltyRating": 66.7
             },
-            "hostCountry": "Canadá"
+            "hostCountry": "Canadá",
+            "tactics": {
+                "possession": 59.5,
+                "counterAttack": 38.5,
+                "pressing": 65.5,
+                "defensiveBlock": 43.5,
+                "aerialStrength": 60.5
+            },
+            "expectedGoals": {
+                "xG": 1.61,
+                "xGA": 1.09
+            }
         },
         "Bosnia y Herzegovina": {
             "confederation": "UEFA",
@@ -1511,6 +1566,17 @@
                 "avgGoalsScored": 1.3,
                 "avgGoalsConceded": 1.5,
                 "avgPenaltyRating": 64.5
+            },
+            "tactics": {
+                "possession": 57,
+                "counterAttack": 41,
+                "pressing": 53,
+                "defensiveBlock": 52,
+                "aerialStrength": 56
+            },
+            "expectedGoals": {
+                "xG": 1.28,
+                "xGA": 1.42
             }
         },
         "Catar": {
@@ -1748,6 +1814,17 @@
                 "avgGoalsScored": 1.25,
                 "avgGoalsConceded": 1.65,
                 "avgPenaltyRating": 64.8
+            },
+            "tactics": {
+                "possession": 34.5,
+                "counterAttack": 70.5,
+                "pressing": 34.5,
+                "defensiveBlock": 56.5,
+                "aerialStrength": 49.5
+            },
+            "expectedGoals": {
+                "xG": 1.29,
+                "xGA": 1.42
             }
         },
         "Suiza": {
@@ -1985,6 +2062,17 @@
                 "avgGoalsScored": 1.6,
                 "avgGoalsConceded": 1.2,
                 "avgPenaltyRating": 70.4
+            },
+            "tactics": {
+                "possession": 62,
+                "counterAttack": 47,
+                "pressing": 71,
+                "defensiveBlock": 32,
+                "aerialStrength": 45
+            },
+            "expectedGoals": {
+                "xG": 1.86,
+                "xGA": 0.84
             }
         },
         "Brasil": {
@@ -2222,6 +2310,17 @@
                 "avgGoalsScored": 2.1,
                 "avgGoalsConceded": 0.9,
                 "avgPenaltyRating": 75.8
+            },
+            "tactics": {
+                "possession": 72.5,
+                "counterAttack": 25.5,
+                "pressing": 82.5,
+                "defensiveBlock": 7.5,
+                "aerialStrength": 79.5
+            },
+            "expectedGoals": {
+                "xG": 2.48,
+                "xGA": 0.5
             }
         },
         "Marruecos": {
@@ -2459,6 +2558,17 @@
                 "avgGoalsScored": 1.9,
                 "avgGoalsConceded": 0.9,
                 "avgPenaltyRating": 71.8
+            },
+            "tactics": {
+                "possession": 58,
+                "counterAttack": 33,
+                "pressing": 75,
+                "defensiveBlock": 33,
+                "aerialStrength": 80
+            },
+            "expectedGoals": {
+                "xG": 2.06,
+                "xGA": 0.64
             }
         },
         "Haití": {
@@ -2696,6 +2806,17 @@
                 "avgGoalsScored": 0.8,
                 "avgGoalsConceded": 2.1,
                 "avgPenaltyRating": 58.7
+            },
+            "tactics": {
+                "possession": 48,
+                "counterAttack": 59,
+                "pressing": 27,
+                "defensiveBlock": 71,
+                "aerialStrength": 25
+            },
+            "expectedGoals": {
+                "xG": 0.78,
+                "xGA": 1.92
             }
         },
         "Escocia": {
@@ -2933,6 +3054,17 @@
                 "avgGoalsScored": 1.35,
                 "avgGoalsConceded": 1.55,
                 "avgPenaltyRating": 70.1
+            },
+            "tactics": {
+                "possession": 49,
+                "counterAttack": 50,
+                "pressing": 43,
+                "defensiveBlock": 58,
+                "aerialStrength": 57
+            },
+            "expectedGoals": {
+                "xG": 1.56,
+                "xGA": 1.14
             }
         },
         "Estados Unidos": {
@@ -3171,7 +3303,18 @@
                 "avgGoalsConceded": 1.05,
                 "avgPenaltyRating": 71.4
             },
-            "hostCountry": "USA"
+            "hostCountry": "USA",
+            "tactics": {
+                "possession": 78,
+                "counterAttack": 25,
+                "pressing": 74,
+                "defensiveBlock": 34,
+                "aerialStrength": 78
+            },
+            "expectedGoals": {
+                "xG": 2.03,
+                "xGA": 0.67
+            }
         },
         "Paraguay": {
             "confederation": "CONMEBOL",
@@ -3408,6 +3551,17 @@
                 "avgGoalsScored": 1.35,
                 "avgGoalsConceded": 1.45,
                 "avgPenaltyRating": 68.5
+            },
+            "tactics": {
+                "possession": 57,
+                "counterAttack": 44,
+                "pressing": 53,
+                "defensiveBlock": 38,
+                "aerialStrength": 54
+            },
+            "expectedGoals": {
+                "xG": 1.5,
+                "xGA": 1.2
             }
         },
         "Australia": {
@@ -3645,6 +3799,17 @@
                 "avgGoalsScored": 1.45,
                 "avgGoalsConceded": 1.35,
                 "avgPenaltyRating": 66.8
+            },
+            "tactics": {
+                "possession": 62.5,
+                "counterAttack": 32.5,
+                "pressing": 58.5,
+                "defensiveBlock": 32.5,
+                "aerialStrength": 37.5
+            },
+            "expectedGoals": {
+                "xG": 1.69,
+                "xGA": 1.02
             }
         },
         "Turquía": {
@@ -3882,6 +4047,17 @@
                 "avgGoalsScored": 1.7,
                 "avgGoalsConceded": 1.3,
                 "avgPenaltyRating": 71.2
+            },
+            "tactics": {
+                "possession": 66,
+                "counterAttack": 26,
+                "pressing": 65,
+                "defensiveBlock": 29,
+                "aerialStrength": 71
+            },
+            "expectedGoals": {
+                "xG": 1.77,
+                "xGA": 0.93
             }
         },
         "Alemania": {
@@ -4111,6 +4287,17 @@
                 "avgGoalsScored": 2.2,
                 "avgGoalsConceded": 0.9,
                 "avgPenaltyRating": 75.6
+            },
+            "tactics": {
+                "possession": 78.5,
+                "counterAttack": 21.5,
+                "pressing": 77.5,
+                "defensiveBlock": 25.5,
+                "aerialStrength": 63.5
+            },
+            "expectedGoals": {
+                "xG": 2.36,
+                "xGA": 0.5
             }
         },
         "Curazao": {
@@ -4348,6 +4535,17 @@
                 "avgGoalsScored": 0.8,
                 "avgGoalsConceded": 2,
                 "avgPenaltyRating": 60.8
+            },
+            "tactics": {
+                "possession": 38.5,
+                "counterAttack": 70.5,
+                "pressing": 28.5,
+                "defensiveBlock": 68.5,
+                "aerialStrength": 25.5
+            },
+            "expectedGoals": {
+                "xG": 0.69,
+                "xGA": 2.02
             }
         },
         "Costa de Marfil": {
@@ -4585,6 +4783,17 @@
                 "avgGoalsScored": 1.55,
                 "avgGoalsConceded": 1.4,
                 "avgPenaltyRating": 70.2
+            },
+            "tactics": {
+                "possession": 45,
+                "counterAttack": 52,
+                "pressing": 51,
+                "defensiveBlock": 51,
+                "aerialStrength": 37
+            },
+            "expectedGoals": {
+                "xG": 1.47,
+                "xGA": 1.23
             }
         },
         "Ecuador": {
@@ -4822,6 +5031,17 @@
                 "avgGoalsScored": 1.6,
                 "avgGoalsConceded": 1.25,
                 "avgPenaltyRating": 70
+            },
+            "tactics": {
+                "possession": 71.5,
+                "counterAttack": 24.5,
+                "pressing": 61.5,
+                "defensiveBlock": 42.5,
+                "aerialStrength": 70.5
+            },
+            "expectedGoals": {
+                "xG": 1.77,
+                "xGA": 0.93
             }
         },
         "Países Bajos": {
@@ -5059,6 +5279,17 @@
                 "avgGoalsScored": 2,
                 "avgGoalsConceded": 1,
                 "avgPenaltyRating": 74.8
+            },
+            "tactics": {
+                "possession": 60.5,
+                "counterAttack": 34.5,
+                "pressing": 63.5,
+                "defensiveBlock": 45.5,
+                "aerialStrength": 84.5
+            },
+            "expectedGoals": {
+                "xG": 2.38,
+                "xGA": 0.5
             }
         },
         "Japón": {
@@ -5296,6 +5527,17 @@
                 "avgGoalsScored": 1.95,
                 "avgGoalsConceded": 1,
                 "avgPenaltyRating": 72.8
+            },
+            "tactics": {
+                "possession": 80,
+                "counterAttack": 20,
+                "pressing": 70,
+                "defensiveBlock": 31,
+                "aerialStrength": 68
+            },
+            "expectedGoals": {
+                "xG": 1.96,
+                "xGA": 0.74
             }
         },
         "Suecia": {
@@ -5533,6 +5775,17 @@
                 "avgGoalsScored": 1.7,
                 "avgGoalsConceded": 1.35,
                 "avgPenaltyRating": 70.6
+            },
+            "tactics": {
+                "possession": 45,
+                "counterAttack": 61,
+                "pressing": 65,
+                "defensiveBlock": 33,
+                "aerialStrength": 55
+            },
+            "expectedGoals": {
+                "xG": 1.7,
+                "xGA": 1
             }
         },
         "Túnez": {
@@ -5770,6 +6023,17 @@
                 "avgGoalsScored": 1.1,
                 "avgGoalsConceded": 1.6,
                 "avgPenaltyRating": 64.2
+            },
+            "tactics": {
+                "possession": 52,
+                "counterAttack": 38,
+                "pressing": 47,
+                "defensiveBlock": 58,
+                "aerialStrength": 31
+            },
+            "expectedGoals": {
+                "xG": 1.36,
+                "xGA": 1.34
             }
         },
         "Bélgica": {
@@ -6007,6 +6271,17 @@
                 "avgGoalsScored": 1.9,
                 "avgGoalsConceded": 1.1,
                 "avgPenaltyRating": 74.6
+            },
+            "tactics": {
+                "possession": 80.5,
+                "counterAttack": 21.5,
+                "pressing": 60.5,
+                "defensiveBlock": 30.5,
+                "aerialStrength": 72.5
+            },
+            "expectedGoals": {
+                "xG": 2.3,
+                "xGA": 0.5
             }
         },
         "Egipto": {
@@ -6252,6 +6527,17 @@
                 "avgGoalsScored": 1.5,
                 "avgGoalsConceded": 1.4,
                 "avgPenaltyRating": 68
+            },
+            "tactics": {
+                "possession": 57,
+                "counterAttack": 42,
+                "pressing": 41,
+                "defensiveBlock": 58,
+                "aerialStrength": 60
+            },
+            "expectedGoals": {
+                "xG": 1.5,
+                "xGA": 1.2
             }
         },
         "Irán": {
@@ -6489,6 +6775,17 @@
                 "avgGoalsScored": 1.7,
                 "avgGoalsConceded": 1.1,
                 "avgPenaltyRating": 70.4
+            },
+            "tactics": {
+                "possession": 43.5,
+                "counterAttack": 58.5,
+                "pressing": 55.5,
+                "defensiveBlock": 41.5,
+                "aerialStrength": 35.5
+            },
+            "expectedGoals": {
+                "xG": 1.7,
+                "xGA": 1.01
             }
         },
         "Nueva Zelanda": {
@@ -6726,6 +7023,17 @@
                 "avgGoalsScored": 0.9,
                 "avgGoalsConceded": 1.9,
                 "avgPenaltyRating": 64.8
+            },
+            "tactics": {
+                "possession": 25,
+                "counterAttack": 70,
+                "pressing": 44,
+                "defensiveBlock": 58,
+                "aerialStrength": 27
+            },
+            "expectedGoals": {
+                "xG": 0.88,
+                "xGA": 1.82
             }
         },
         "España": {
@@ -6963,6 +7271,17 @@
                 "avgGoalsScored": 2.3,
                 "avgGoalsConceded": 0.8,
                 "avgPenaltyRating": 76.8
+            },
+            "tactics": {
+                "possession": 86,
+                "counterAttack": 8,
+                "pressing": 76,
+                "defensiveBlock": 17,
+                "aerialStrength": 85
+            },
+            "expectedGoals": {
+                "xG": 2.53,
+                "xGA": 0.5
             }
         },
         "Cabo Verde": {
@@ -7200,6 +7519,17 @@
                 "avgGoalsScored": 0.9,
                 "avgGoalsConceded": 1.9,
                 "avgPenaltyRating": 61.8
+            },
+            "tactics": {
+                "possession": 28,
+                "counterAttack": 74,
+                "pressing": 23,
+                "defensiveBlock": 76,
+                "aerialStrength": 27
+            },
+            "expectedGoals": {
+                "xG": 0.9,
+                "xGA": 1.8
             }
         },
         "Arabia Saudita": {
@@ -7437,6 +7767,17 @@
                 "avgGoalsScored": 1.2,
                 "avgGoalsConceded": 1.5,
                 "avgPenaltyRating": 64.4
+            },
+            "tactics": {
+                "possession": 34,
+                "counterAttack": 58,
+                "pressing": 50,
+                "defensiveBlock": 59,
+                "aerialStrength": 49
+            },
+            "expectedGoals": {
+                "xG": 1.35,
+                "xGA": 1.35
             }
         },
         "Uruguay": {
@@ -7674,6 +8015,17 @@
                 "avgGoalsScored": 1.8,
                 "avgGoalsConceded": 1.1,
                 "avgPenaltyRating": 72.8
+            },
+            "tactics": {
+                "possession": 77.5,
+                "counterAttack": 22.5,
+                "pressing": 62.5,
+                "defensiveBlock": 44.5,
+                "aerialStrength": 76.5
+            },
+            "expectedGoals": {
+                "xG": 2.17,
+                "xGA": 0.54
             }
         },
         "Francia": {
@@ -7911,6 +8263,17 @@
                 "avgGoalsScored": 2.4,
                 "avgGoalsConceded": 0.85,
                 "avgPenaltyRating": 78.4
+            },
+            "tactics": {
+                "possession": 77,
+                "counterAttack": 26,
+                "pressing": 89,
+                "defensiveBlock": 17,
+                "aerialStrength": 88
+            },
+            "expectedGoals": {
+                "xG": 2.59,
+                "xGA": 0.5
             }
         },
         "Irak": {
@@ -8148,6 +8511,17 @@
                 "avgGoalsScored": 1.15,
                 "avgGoalsConceded": 1.55,
                 "avgPenaltyRating": 64.2
+            },
+            "tactics": {
+                "possession": 40,
+                "counterAttack": 63,
+                "pressing": 26,
+                "defensiveBlock": 81,
+                "aerialStrength": 36
+            },
+            "expectedGoals": {
+                "xG": 1.23,
+                "xGA": 1.47
             }
         },
         "Noruega": {
@@ -8385,6 +8759,17 @@
                 "avgGoalsScored": 2,
                 "avgGoalsConceded": 1.2,
                 "avgPenaltyRating": 73.6
+            },
+            "tactics": {
+                "possession": 74,
+                "counterAttack": 25,
+                "pressing": 70,
+                "defensiveBlock": 36,
+                "aerialStrength": 51
+            },
+            "expectedGoals": {
+                "xG": 1.77,
+                "xGA": 0.93
             }
         },
         "Senegal": {
@@ -8622,6 +9007,17 @@
                 "avgGoalsScored": 1.75,
                 "avgGoalsConceded": 1.1,
                 "avgPenaltyRating": 72.6
+            },
+            "tactics": {
+                "possession": 61,
+                "counterAttack": 48,
+                "pressing": 47,
+                "defensiveBlock": 57,
+                "aerialStrength": 68
+            },
+            "expectedGoals": {
+                "xG": 1.89,
+                "xGA": 0.81
             }
         },
         "Argentina": {
@@ -8862,6 +9258,17 @@
             },
             "h2h": {
                 "Francia": "Argentina ganó la Final del Mundial 2022 por penales tras empatar 3-3."
+            },
+            "tactics": {
+                "possession": 82,
+                "counterAttack": 19,
+                "pressing": 63,
+                "defensiveBlock": 35,
+                "aerialStrength": 61
+            },
+            "expectedGoals": {
+                "xG": 2.65,
+                "xGA": 0.5
             }
         },
         "Argelia": {
@@ -9099,6 +9506,17 @@
                 "avgGoalsScored": 1.55,
                 "avgGoalsConceded": 1.3,
                 "avgPenaltyRating": 68.4
+            },
+            "tactics": {
+                "possession": 60,
+                "counterAttack": 32,
+                "pressing": 45,
+                "defensiveBlock": 54,
+                "aerialStrength": 52
+            },
+            "expectedGoals": {
+                "xG": 1.57,
+                "xGA": 1.13
             }
         },
         "Austria": {
@@ -9336,6 +9754,17 @@
                 "avgGoalsScored": 1.8,
                 "avgGoalsConceded": 1.25,
                 "avgPenaltyRating": 72.2
+            },
+            "tactics": {
+                "possession": 48,
+                "counterAttack": 61,
+                "pressing": 69,
+                "defensiveBlock": 38,
+                "aerialStrength": 56
+            },
+            "expectedGoals": {
+                "xG": 1.92,
+                "xGA": 0.78
             }
         },
         "Jordania": {
@@ -9573,6 +10002,17 @@
                 "avgGoalsScored": 0.9,
                 "avgGoalsConceded": 1.8,
                 "avgPenaltyRating": 60.8
+            },
+            "tactics": {
+                "possession": 25,
+                "counterAttack": 70,
+                "pressing": 40,
+                "defensiveBlock": 50,
+                "aerialStrength": 44
+            },
+            "expectedGoals": {
+                "xG": 0.95,
+                "xGA": 1.75
             }
         },
         "Portugal": {
@@ -9818,6 +10258,17 @@
                 "avgGoalsScored": 2.1,
                 "avgGoalsConceded": 0.9,
                 "avgPenaltyRating": 76.2
+            },
+            "tactics": {
+                "possession": 75,
+                "counterAttack": 27,
+                "pressing": 75,
+                "defensiveBlock": 32,
+                "aerialStrength": 85
+            },
+            "expectedGoals": {
+                "xG": 2.46,
+                "xGA": 0.5
             }
         },
         "República Democrática del Congo": {
@@ -10055,6 +10506,17 @@
                 "avgGoalsScored": 1.25,
                 "avgGoalsConceded": 1.5,
                 "avgPenaltyRating": 66.4
+            },
+            "tactics": {
+                "possession": 35,
+                "counterAttack": 55,
+                "pressing": 50,
+                "defensiveBlock": 50,
+                "aerialStrength": 48
+            },
+            "expectedGoals": {
+                "xG": 1.33,
+                "xGA": 1.37
             }
         },
         "Uzbekistán": {
@@ -10292,6 +10754,17 @@
                 "avgGoalsScored": 1,
                 "avgGoalsConceded": 1.7,
                 "avgPenaltyRating": 62.8
+            },
+            "tactics": {
+                "possession": 39.5,
+                "counterAttack": 65.5,
+                "pressing": 22.5,
+                "defensiveBlock": 68.5,
+                "aerialStrength": 22.5
+            },
+            "expectedGoals": {
+                "xG": 1.18,
+                "xGA": 1.53
             }
         },
         "Colombia": {
@@ -10529,6 +11002,17 @@
                 "avgGoalsScored": 1.9,
                 "avgGoalsConceded": 0.95,
                 "avgPenaltyRating": 74
+            },
+            "tactics": {
+                "possession": 82,
+                "counterAttack": 12,
+                "pressing": 65,
+                "defensiveBlock": 43,
+                "aerialStrength": 61
+            },
+            "expectedGoals": {
+                "xG": 2.19,
+                "xGA": 0.51
             }
         },
         "Croacia": {
@@ -10766,6 +11250,17 @@
                 "avgGoalsScored": 1.7,
                 "avgGoalsConceded": 1,
                 "avgPenaltyRating": 73.6
+            },
+            "tactics": {
+                "possession": 69,
+                "counterAttack": 28,
+                "pressing": 52,
+                "defensiveBlock": 48,
+                "aerialStrength": 70
+            },
+            "expectedGoals": {
+                "xG": 2.14,
+                "xGA": 0.56
             }
         },
         "Inglaterra": {
@@ -11003,6 +11498,17 @@
                 "avgGoalsScored": 2.15,
                 "avgGoalsConceded": 0.85,
                 "avgPenaltyRating": 77.4
+            },
+            "tactics": {
+                "possession": 70.5,
+                "counterAttack": 28.5,
+                "pressing": 73.5,
+                "defensiveBlock": 33.5,
+                "aerialStrength": 70.5
+            },
+            "expectedGoals": {
+                "xG": 2.52,
+                "xGA": 0.5
             }
         },
         "Ghana": {
@@ -11240,6 +11746,17 @@
                 "avgGoalsScored": 1.05,
                 "avgGoalsConceded": 1.8,
                 "avgPenaltyRating": 66.4
+            },
+            "tactics": {
+                "possession": 42,
+                "counterAttack": 67,
+                "pressing": 38,
+                "defensiveBlock": 64,
+                "aerialStrength": 50
+            },
+            "expectedGoals": {
+                "xG": 1.18,
+                "xGA": 1.52
             }
         },
         "Panamá": {
@@ -11477,6 +11994,17 @@
                 "avgGoalsScored": 1.1,
                 "avgGoalsConceded": 1.6,
                 "avgPenaltyRating": 64.6
+            },
+            "tactics": {
+                "possession": 49,
+                "counterAttack": 57,
+                "pressing": 47,
+                "defensiveBlock": 52,
+                "aerialStrength": 25
+            },
+            "expectedGoals": {
+                "xG": 1.29,
+                "xGA": 1.41
             }
         }
     }

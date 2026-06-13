@@ -63,7 +63,7 @@ class PredictionEngine {
     // ============================================================
     // CÁLCULO DE PROBABILIDADES BASE (Modelo de Poisson Dinámico v5.0)
     // ============================================================
-    getGoalExpectancy(teamA, teamB) {
+    getGoalExpectancy(teamA, teamB, geminiFactorsA = null, geminiFactorsB = null) {
         const isLocalA = teamA.hostCountry && !teamB.hostCountry;
         const isLocalB = teamB.hostCountry && !teamA.hostCountry;
 
@@ -115,12 +115,26 @@ class PredictionEngine {
 
             case 'standard':
             default:
-                // v5.0: Mayor peso en ELO histórico (0.65 vs 0.40 anterior)
-                // Esto reduce el sesgo hacia equipos europeos de alta transferencia
-                compositeEloA = (eloHistA * 0.65) + (eloSquadA * 0.35);
-                compositeEloB = (eloHistB * 0.65) + (eloSquadB * 0.35);
-                formMultA = this.getFormMultiplier(teamA);
-                formMultB = this.getFormMultiplier(teamB);
+                // ================================================================
+                // INTEGRACIÓN ADVANCED FORM ENGINE
+                // ================================================================
+                const advFormA = this.calculateAdvancedForm(teamA);
+                const advFormB = this.calculateAdvancedForm(teamB);
+
+                // Reducimos peso de ELO histórico (0.65 -> 0.50) e introducimos el score de forma reciente
+                const formEloA = 1500 + ((advFormA.RecentPerformanceScore - 1) * 800);
+                const formEloB = 1500 + ((advFormB.RecentPerformanceScore - 1) * 800);
+
+                compositeEloA = (eloHistA * 0.50) + (eloSquadA * 0.30) + (formEloA * 0.20);
+                compositeEloB = (eloHistB * 0.50) + (eloSquadB * 0.30) + (formEloB * 0.20);
+                
+                // Aplicamos el multiplicador de score
+                formMultA = this.getFormMultiplier(teamA) * advFormA.RecentPerformanceScore;
+                formMultB = this.getFormMultiplier(teamB) * advFormB.RecentPerformanceScore;
+                
+                // Guardamos la info táctica para uso en la sección de ajuste táctico
+                teamA._advForm = advFormA;
+                teamB._advForm = advFormB;
                 break;
         }
 
@@ -166,16 +180,93 @@ class PredictionEngine {
         if (this.modelType === 'standard' && teamA.teamStats && teamB.teamStats) {
             const WC_AVG = 1.35; // Promedio real WC 2010-2022
 
-            const attackFactorA  = teamA.teamStats.avgGoalsScored   / WC_AVG;
-            const defenseFactorB = teamB.teamStats.avgGoalsConceded  / WC_AVG;
-            const tacticMultA    = Math.max(0.88, Math.min(1.12, (attackFactorA + defenseFactorB) / 2));
+            let attackFactorA  = teamA.teamStats.avgGoalsScored   / WC_AVG;
+            let defenseFactorB = teamB.teamStats.avgGoalsConceded  / WC_AVG;
+            let attackFactorB  = teamB.teamStats.avgGoalsScored   / WC_AVG;
+            let defenseFactorA = teamA.teamStats.avgGoalsConceded  / WC_AVG;
 
-            const attackFactorB  = teamB.teamStats.avgGoalsScored   / WC_AVG;
-            const defenseFactorA = teamA.teamStats.avgGoalsConceded  / WC_AVG;
+            // Integrar Advanced Form Engine (si está disponible)
+            if (teamA._advForm && teamB._advForm) {
+                attackFactorA = (attackFactorA + teamA._advForm.recentAttackForm) / 2;
+                defenseFactorB = (defenseFactorB + teamB._advForm.recentDefenseForm) / 2;
+                attackFactorB = (attackFactorB + teamB._advForm.recentAttackForm) / 2;
+                defenseFactorA = (defenseFactorA + teamA._advForm.recentDefenseForm) / 2;
+            }
+
+            const tacticMultA    = Math.max(0.88, Math.min(1.12, (attackFactorA + defenseFactorB) / 2));
             const tacticMultB    = Math.max(0.88, Math.min(1.12, (attackFactorB + defenseFactorA) / 2));
 
             lambdaA *= tacticMultA;
             lambdaB *= tacticMultB;
+        }
+
+        // ================================================================
+        // INTEGRACIÓN PLAYER IMPACT ENGINE
+        // ================================================================
+        // Calcula la fuerza de ataque, mediocampo y defensa basada en jugadores
+        if (teamA.players && teamB.players) {
+            const strengthA = this.calculateTeamPlayerStrength(teamA.players);
+            const strengthB = this.calculateTeamPlayerStrength(teamB.players);
+
+            // Multiplicador derivado del enfrentamiento Ataque vs Defensa y control de Mediocampo
+            // Centrado en 1.0. Rango típico de diferencia: -20 a +20, resultando en multiplicador de 0.9 a 1.1
+            const impactMultA = 1 + (strengthA.attackStrength - strengthB.defenseStrength) * 0.005 
+                                  + (strengthA.midfieldStrength - strengthB.midfieldStrength) * 0.002;
+            const impactMultB = 1 + (strengthB.attackStrength - strengthA.defenseStrength) * 0.005 
+                                  + (strengthB.midfieldStrength - strengthA.midfieldStrength) * 0.002;
+
+            // Clamping del multiplicador del Player Impact Engine para evitar valores extremos (±15% máx)
+            lambdaA *= Math.max(0.85, Math.min(1.15, impactMultA));
+            lambdaB *= Math.max(0.85, Math.min(1.15, impactMultB));
+        }
+
+        // ================================================================
+        // INTEGRACIÓN TACTICAL MATCHUP ENGINE
+        // ================================================================
+        const { tacticalMultA, tacticalMultB } = this.calculateStyleAdvantage(teamA, teamB);
+        lambdaA *= tacticalMultA;
+        lambdaB *= tacticalMultB;
+
+        // ================================================================
+        // INTEGRACIÓN CONTEXTUAL FACTORS ENGINE
+        // ================================================================
+        // En un Mundial, la sede suele ser neutral, por lo que asumiremos
+        // isHome = true temporalmente para el equipo base y false para el visitante,
+        // o dependeremos de las banderas contextuales que se le pasen.
+        const ctxFactorsA = teamA.contextualFactors || {};
+        const ctxFactorsB = teamB.contextualFactors || {};
+        const contextMultA = this.calculateContextMultiplier(ctxFactorsA, true);
+        const contextMultB = this.calculateContextMultiplier(ctxFactorsB, false);
+
+        lambdaA *= contextMultA;
+        lambdaB *= contextMultB;
+
+        // ================================================================
+        // INTEGRACIÓN EXPECTED GOALS (xG) ENGINE
+        // ================================================================
+        const XG_WEIGHT = 0.20; // 20% peso para la métrica xG pura, 80% modelo Poisson predictivo
+        const xgA = this.calculateExpectedAttackStrength(teamA);
+        const xgaB = this.calculateExpectedDefenseStrength(teamB);
+        const xgB = this.calculateExpectedAttackStrength(teamB);
+        const xgaA = this.calculateExpectedDefenseStrength(teamA);
+
+        // Promedio cruzado: el ataque de A vs la defensa de B
+        const xgFactorA = (xgA + xgaB) / 2;
+        const xgFactorB = (xgB + xgaA) / 2;
+
+        // Blending matemático
+        lambdaA = (lambdaA * (1 - XG_WEIGHT)) + (xgFactorA * XG_WEIGHT);
+        lambdaB = (lambdaB * (1 - XG_WEIGHT)) + (xgFactorB * XG_WEIGHT);
+
+        // ================================================================
+        // INTEGRACIÓN GEMINI QUANTITATIVE INTELLIGENCE ENGINE
+        // ================================================================
+        if (geminiFactorsA || geminiFactorsB) {
+            const geminiMultA = this.calculateGeminiAdjustment(geminiFactorsA);
+            const geminiMultB = this.calculateGeminiAdjustment(geminiFactorsB);
+            
+            lambdaA *= geminiMultA;
+            lambdaB *= geminiMultB;
         }
 
         // Aplicar corrección de sesgo acumulada del aprendizaje incremental
@@ -226,14 +317,14 @@ class PredictionEngine {
     // ============================================================
     // PREDICCIÓN COMPLETA DE PARTIDO
     // ============================================================
-    predictMatch(teamAName, teamBName) {
+    predictMatch(teamAName, teamBName, geminiFactorsA = null, geminiFactorsB = null) {
         const teamA = this.teams[teamAName];
         const teamB = this.teams[teamBName];
         if (!teamA || !teamB) {
             return { error: `Equipo no encontrado: "${teamAName}" o "${teamBName}"` };
         }
 
-        const { lambdaA, lambdaB, pWinA, eloDiff } = this.getGoalExpectancy(teamA, teamB);
+        const { lambdaA, lambdaB, pWinA, eloDiff } = this.getGoalExpectancy(teamA, teamB, geminiFactorsA, geminiFactorsB);
 
         // Construir matriz de probabilidades (Dixon-Coles bivariada)
         let probMatrix = [];
@@ -954,6 +1045,260 @@ class PredictionEngine {
         const result = Math.min(99, Math.max(1, Math.round(strength)));
         if (this._strengthCache) this._strengthCache[teamName] = result;
         return result;
+    }
+
+    // ============================================================
+    // PLAYER IMPACT ENGINE
+    // ============================================================
+
+    calculatePlayerImpact(player) {
+        if (!player) return 0;
+        const goals = player.goals || 0;
+        const assists = player.assists || 0;
+        const minutes = player.minutes || 0;
+        const penaltyRating = player.penaltyRating || 0;
+
+        // Fórmula base de impacto
+        const rawScore = (goals * 4) + (assists * 3) + (minutes * 0.01) + (penaltyRating * 0.2);
+        
+        // Normalización [0, 100]
+        return Math.min(100, Math.max(0, rawScore));
+    }
+
+    calculateAvailabilityImpact(player, baseImpact) {
+        if (!player || !player.availability) return baseImpact;
+        
+        switch(player.availability.toLowerCase()) {
+            case 'injured':
+            case 'suspended':
+                return 0.0;
+            case 'doubtful':
+                return baseImpact * 0.5;
+            case 'available':
+            default:
+                return baseImpact;
+        }
+    }
+
+    calculateTeamPlayerStrength(players) {
+        if (!players || !Array.isArray(players) || players.length === 0) {
+            return { attackStrength: 50, midfieldStrength: 50, defenseStrength: 50 };
+        }
+
+        let attackScores = [];
+        let midfieldScores = [];
+        let defenseScores = [];
+
+        players.forEach(player => {
+            const baseImpact = this.calculatePlayerImpact(player);
+            const impact = this.calculateAvailabilityImpact(player, baseImpact);
+            
+            if (player.position === 'DEL') {
+                attackScores.push(impact);
+            } else if (player.position === 'MED') {
+                midfieldScores.push(impact);
+            } else if (player.position === 'DEF' || player.position === 'POR') {
+                defenseScores.push(impact);
+            }
+        });
+
+        // Promedio de las puntuaciones por posición. Si no hay jugadores, se asume un valor base de 50.
+        const avg = (arr) => arr.length > 0 ? arr.reduce((a, b) => a + b, 0) / arr.length : 50;
+
+        return {
+            attackStrength: Math.round(avg(attackScores)),
+            midfieldStrength: Math.round(avg(midfieldScores)),
+            defenseStrength: Math.round(avg(defenseScores))
+        };
+    }
+
+    // ============================================================
+    // ADVANCED FORM ENGINE
+    // ============================================================
+
+    calculateAdvancedForm(team) {
+        if (!team || !team.recentForm) {
+            return {
+                goalsFor: 0, goalsAgainst: 0, wins: 0, draws: 0, losses: 0,
+                recentAttackForm: 1.0, recentDefenseForm: 1.0, RecentPerformanceScore: 1.0
+            };
+        }
+        
+        const f = team.recentForm;
+        const totalMatches = f.wins + f.draws + f.losses;
+        const scale = totalMatches > 0 ? 10 / totalMatches : 1;
+
+        const wins = f.wins * scale;
+        const draws = f.draws * scale;
+        const losses = f.losses * scale;
+        
+        // Si goalsFor no existe en el JSON, lo inferimos de forma muy conservadora
+        const goalsFor = (f.goalsFor !== undefined ? f.goalsFor : (f.wins * 2 + f.draws)) * scale;
+        const goalsAgainst = (f.goalsAgainst !== undefined ? f.goalsAgainst : (f.losses * 2 + f.draws)) * scale;
+
+        // Promedio de goles esperados en 10 partidos
+        const avgGoals10 = 13.5; 
+        
+        const recentAttackForm = Math.max(0.5, Math.min(2.0, goalsFor / avgGoals10));
+        const recentDefenseForm = Math.max(0.5, Math.min(2.0, goalsAgainst / avgGoals10));
+
+        // Score: Victoria = 3, Empate = 1, Derrota = 0
+        const points = (wins * 3) + draws;
+        const maxPoints = 30; // 10 partidos ganados
+        
+        // Multiplicador centrado en 1.0 (equipo promedio saca ~12-15 puntos en 10 partidos)
+        // 15 pts -> 1.0, 30 pts -> 1.25, 0 pts -> 0.75
+        const RecentPerformanceScore = 0.75 + (points / maxPoints) * 0.50;
+
+        return {
+            wins, draws, losses, goalsFor, goalsAgainst,
+            recentAttackForm, recentDefenseForm, RecentPerformanceScore
+        };
+    }
+
+    // ============================================================
+    // TACTICAL MATCHUP ENGINE
+    // ============================================================
+
+    calculateStyleAdvantage(teamA, teamB) {
+        let multA = 1.0;
+        let multB = 1.0;
+
+        const tacA = teamA.tactics;
+        const tacB = teamB.tactics;
+
+        if (!tacA || !tacB) return { tacticalMultA: 1.0, tacticalMultB: 1.0 };
+
+        // 1. Posesión vs Bloque Bajo
+        // Si A domina posesión y B tiene bloque bajo alto
+        if (tacA.possession > 60 && tacB.defensiveBlock > 60) {
+            // A le cuesta entrar, B puede contraatacar/defenderse mejor
+            multA -= 0.05 * (tacB.defensiveBlock - 50) / 50; 
+            multB += 0.05 * (tacB.defensiveBlock - 50) / 50; 
+        }
+        if (tacB.possession > 60 && tacA.defensiveBlock > 60) {
+            multB -= 0.05 * (tacA.defensiveBlock - 50) / 50;
+            multA += 0.05 * (tacA.defensiveBlock - 50) / 50;
+        }
+
+        // 2. Contraataque vs Presión Alta
+        // Si A es rápido a la contra y B presiona alto (dejando espacios atrás)
+        if (tacA.counterAttack > 60 && tacB.pressing > 60) {
+            multA += 0.08 * (tacA.counterAttack - 50) / 50; 
+        }
+        if (tacB.counterAttack > 60 && tacA.pressing > 60) {
+            multB += 0.08 * (tacB.counterAttack - 50) / 50;
+        }
+
+        // 3. Duelo Aéreo
+        const aerialDiff = tacA.aerialStrength - tacB.aerialStrength;
+        if (aerialDiff > 15) {
+            multA += 0.05 * (aerialDiff / 100); 
+        } else if (aerialDiff < -15) {
+            multB += 0.05 * (-aerialDiff / 100);
+        }
+
+        // Limitar multiplicadores para mantener el balance y determinismo matemático
+        const clamp = (val) => Math.max(0.85, Math.min(1.15, val));
+
+        return {
+            tacticalMultA: clamp(multA),
+            tacticalMultB: clamp(multB)
+        };
+    }
+
+    // ============================================================
+    // CONTEXTUAL FACTORS ENGINE
+    // ============================================================
+
+    calculateContextMultiplier(factors = {}, isHome = false) {
+        let adjustment = 1.0;
+
+        // 1. Altitud (solo afecta al visitante)
+        // altitudeEffect: boolean, true si la sede está a >2000m
+        if (!isHome && factors.altitudeEffect) {
+            adjustment *= 0.94; // ~6% desventaja para visitantes en alta altitud
+        }
+
+        // 2. Fatiga (días de descanso)
+        // restDays: días desde el último partido (default 7)
+        const restDays = factors.restDays != null ? factors.restDays : 7;
+        if (restDays < 4) {
+            adjustment *= 0.95; // <4 días: fatiga significativa (-5%)
+        } else if (restDays < 6) {
+            adjustment *= 0.98; // 4-5 días: fatiga leve (-2%)
+        }
+
+        // 3. Fixture Congestion (partidos en los últimos 10 días)
+        const recentMatches = Math.min(5, Math.max(0, factors.recentMatches || 1));
+        if (recentMatches >= 4) {
+            adjustment *= 0.96; // Congestión severa: -4%
+        } else if (recentMatches >= 3) {
+            adjustment *= 0.98; // Congestión moderada: -2%
+        }
+
+        // 4. Clima (calor extremo, lluvia intensa)
+        const weatherPenalty = Math.min(1, Math.max(0, factors.weatherPenalty || 0));
+        if (weatherPenalty > 0.5) {
+            adjustment *= 0.96; // Clima adverso: -4%
+        } else if (weatherPenalty > 0.25) {
+            adjustment *= 0.98; // Clima moderado: -2%
+        }
+
+        // Capping final: nunca más de ±15% sobre base
+        return Math.max(0.85, Math.min(1.15, adjustment));
+    }
+
+    // ============================================================
+    // EXPECTED GOALS (xG) ENGINE
+    // ============================================================
+
+    calculateExpectedAttackStrength(team) {
+        if (team && team.expectedGoals && team.expectedGoals.xG != null) {
+            return team.expectedGoals.xG;
+        }
+        return 1.35; // WC Average fallback
+    }
+
+    calculateExpectedDefenseStrength(team) {
+        if (team && team.expectedGoals && team.expectedGoals.xGA != null) {
+            return team.expectedGoals.xGA;
+        }
+        return 1.35; // WC Average fallback
+    }
+
+    // ============================================================
+    // GEMINI QUANTITATIVE INTELLIGENCE ENGINE
+    // ============================================================
+
+    calculateGeminiAdjustment(factors) {
+        if (!factors || typeof factors.confidence !== 'number') return 1.0;
+
+        // Si la confianza es menor a 60, descartamos el ajuste
+        if (factors.confidence < 60) return 1.0;
+
+        // Sumatoria de impactos (-10 a +10 cada uno, total teórico -60 a +60)
+        let totalImpact = 0;
+        totalImpact += (factors.injuryImpact || 0);
+        totalImpact += (factors.suspensionImpact || 0);
+        totalImpact += (factors.coachImpact || 0);
+        totalImpact += (factors.tacticalImpact || 0);
+        totalImpact += (factors.motivationImpact || 0);
+        totalImpact += (factors.chemistryImpact || 0);
+
+        // Convertimos a multiplicador. Ejemplo: 1 punto de impacto = 0.5% de ajuste.
+        // Un coachImpact de -6 reduce el rendimiento global un 3%.
+        let rawAdjustment = 1.0 + (totalImpact * 0.005);
+
+        // Escalamos por confianza
+        // Si confidence está entre 60 y 80, aplicamos una fracción proporcional. Si >= 80, full.
+        if (factors.confidence >= 60 && factors.confidence < 80) {
+            const confidenceScale = (factors.confidence - 60) / 20; 
+            rawAdjustment = 1.0 + ((rawAdjustment - 1.0) * confidenceScale);
+        }
+
+        // Capping estricto (±10%) del modelo matemático original
+        return Math.max(0.90, Math.min(1.10, rawAdjustment));
     }
 
     getFavorites() {
