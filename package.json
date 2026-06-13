@@ -1,12 +1,23 @@
 {
   "name": "predictor-mundial-2026",
-  "version": "1.0.0",
-  "description": "Algoritmo matemático predictivo para el Mundial FIFA 2026",
+  "version": "6.0.0",
+  "description": "Predictor Mundial FIFA 2026 — Motor Poisson-Dixon-Coles + Gemini AI",
   "private": true,
   "scripts": {
     "start": "npx serve . -l 3000",
-    "dev": "npx serve . -l 3000 --cors"
+    "dev": "npx serve . -l 3000 --cors",
+    "update-elos": "node update_elite_players.js",
+    "update-squads": "node update_squad_values.js",
+    "test:engine": "node -e \"const E=require('./engine.js');const d=require('./data.json');const e=new E(d);const r=e.predictMatch('Argentina','Francia');console.log('Argentina vs Francia:',r.winA+'%','draw:'+r.draw+'%','Francia:'+r.winB+'%','Score:',r.mostLikelyScore);\"",
+    "test:analyze": "node -e \"const https=require('https');console.log('api/analyze.js syntax check OK');require('./api/analyze.js');\"",
+    "build": "echo 'No build step required — static HTML/JS + Vercel Serverless Functions' && npm run test:engine"
   },
-  "keywords": ["mundial", "2026", "futbol", "prediccion", "elo", "poisson"],
-  "license": "MIT"
+  "keywords": ["mundial", "2026", "futbol", "prediccion", "elo", "poisson", "gemini", "ia"],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "optionalDependencies": {
+    "@vercel/kv": "^1.0.0"
+  }
 }

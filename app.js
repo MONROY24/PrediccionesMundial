@@ -32,11 +32,17 @@ let WORLD_CUP_DATA = null;
 let engine = null;
 let resultsManager = null;
 
+// ── Estado de Análisis IA (Fase 8-9) ──
+let _currentPredictionForAI = null;   // Predicción activa para enviar a Gemini
+let _aiAnalysisCache = {};            // Cache de análisis por partido
+let _aiAnalysisAbort = null;          // AbortController para cancelar peticiones
+
 // ============================================================
 // INICIALIZACIÓN
 // ============================================================
 document.addEventListener('DOMContentLoaded', async () => {
     try {
+        // ── Paso 1: Cargar data.json base ──
         const response = await fetch('data.json');
         WORLD_CUP_DATA = await response.json();
 
@@ -54,17 +60,41 @@ document.addEventListener('DOMContentLoaded', async () => {
             }).join('');
         }
 
-        // Inicializar motor
+        // ── Paso 2: Inicializar motor base ──
         engine = new PredictionEngine(WORLD_CUP_DATA);
 
-        // Inicializar ResultsManager y restaurar calibración
+        // ── Paso 3: Inicializar ResultsManager y restaurar calibración local ──
         resultsManager = new ResultsManager();
         if (resultsManager.getResultCount() > 0) {
             const restored = resultsManager.restoreEngineCalibration(engine);
             if (restored) {
-                console.log(`[App] Calibración restaurada: ${resultsManager.getResultCount()} partidos previos`);
+                console.log(`[App] Calibración local restaurada: ${resultsManager.getResultCount()} partidos previos`);
             }
         }
+
+        // ── Paso 4 (FASE 2-4): Cargar datos en vivo en background (no bloquea UI) ──
+        resultsManager.loadLiveData(WORLD_CUP_DATA).then(liveResult => {
+            if (liveResult.updated > 0) {
+                // Reconstruir engine con datos frescos
+                engine = new PredictionEngine(WORLD_CUP_DATA);
+                resultsManager.restoreEngineCalibration(engine);
+                engine._strengthCache = {};
+                // Actualizar renders que dependen de ELO
+                renderFavorites();
+                renderGroups();
+                console.log(`[App v6] ELO en vivo: ${liveResult.updated} equipos actualizados desde ${liveResult.source}`);
+                // Mostrar badge de datos frescos
+                showLiveDataBadge(liveResult.updated);
+            }
+        }).catch(() => { /* Fallo silencioso, data.json ya está cargado */ });
+
+        // ── Paso 5 (FASE 6): Cargar estado compartido del backend ──
+        resultsManager.loadSharedState(engine).then(sharedResult => {
+            if (sharedResult.applied) {
+                console.log(`[App v6] Estado compartido aplicado: ${sharedResult.matchesProcessed} partidos globales`);
+                updateCalibrationDisplay();
+            }
+        }).catch(() => { /* Fallo silencioso */ });
 
         initTabs();
         populateTeamSelectors();
@@ -75,7 +105,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         setupTeamSelectorListeners();
         setupButtons();
 
-        // Módulos nuevos
+        // Módulos nuevos v5
         populateResultsSelectors();
         setupResultsTab();
         renderResultsList();
@@ -87,6 +117,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         document.body.innerHTML = `<h2 style="color:white;text-align:center;margin-top:50px">⚠️ Error crítico cargando data.json. Asegúrate de estar ejecutando la web a través de un servidor (ej. Live Server o Vercel).</h2>`;
     }
 });
+
+// Muestra badge temporal de datos frescos en el hero
+function showLiveDataBadge(count) {
+    const badge = document.getElementById('liveDataBadge');
+    if (badge) {
+        badge.textContent = `🔴 EN VIVO • ${count} equipos actualizados`;
+        badge.style.opacity = '1';
+        setTimeout(() => { badge.style.opacity = '0'; }, 8000);
+    }
+}
 
 // ============================================================
 // URL PARAMS
@@ -324,7 +364,15 @@ async function runPrediction() {
         const currentModel = document.getElementById('singleMatchModel')?.value || 'standard';
         engine.modelType   = currentModel;
 
+        // ── FASE 7: Aplicar factores contextuales si están configurados ──
+        const contextFactors = getContextualFactors();
+        applyContextualEloAdjustment(teamA, teamB, contextFactors);
+
         const result = engine.predictMatch(teamA, teamB);
+
+        // Revertir ajustes contextuales (no persistir cambios en los datos base)
+        revertContextualEloAdjustment(teamA, teamB);
+
         if (result.error) throw new Error(result.error);
 
         // Guardar predicción en ResultsManager para evaluación posterior
@@ -332,8 +380,15 @@ async function runPrediction() {
             resultsManager.savePrediction(teamA, teamB, result);
         }
 
+        // Guardar predicción actual para el análisis IA
+        _currentPredictionForAI = { teamA, teamB, result, contextFactors };
+
         const comparison = engine.compareTeams(teamA, teamB);
         displayPrediction(result, comparison);
+
+        // ── FASE 8-9: Lanzar análisis Gemini automáticamente ──
+        triggerAIAnalysis(teamA, teamB, result, contextFactors);
+
     } catch (err) {
         console.error(err);
         showAlert('Error en la predicción: ' + err.message);
@@ -940,11 +995,15 @@ async function saveResult() {
     const btn  = document.getElementById('saveResultBtn');
     const orig = btn.innerHTML;
     btn.disabled  = true;
-    btn.innerHTML = '⏳ Guardando y recalibrando...';
+    btn.innerHTML = '⏳ Guardando y sincronizando...';
 
     await delay(30);
 
-    const res = resultsManager.addResult({ teamA, teamB, goalsA, goalsB, date, competition: 'FIFA World Cup 2026', stage }, engine);
+    // FASE 6: Usar addResultAndSync() para guardar local + sincronizar con backend
+    const res = await resultsManager.addResultAndSync(
+        { teamA, teamB, goalsA, goalsB, date, competition: 'FIFA World Cup 2026', stage },
+        engine
+    );
 
     if (res.error) {
         showFormStatus(`Error: ${res.error}`, 'error');
@@ -954,6 +1013,8 @@ async function saveResult() {
         if (upd && !upd.error) {
             msg += ` ELO: ${teamA} ${upd.eloChangeA > 0 ? '+' : ''}${upd.eloChangeA} → ${upd.newEloA} | ${teamB} ${upd.eloChangeB > 0 ? '+' : ''}${upd.eloChangeB} → ${upd.newEloB}`;
         }
+        // Indicar si se sincronizó con el backend
+        if (res.sync?.backend) msg += ' · ☁️ Compartido';
         showFormStatus(msg, 'success');
 
         // Resetear goles
@@ -963,7 +1024,6 @@ async function saveResult() {
         renderResultsList();
         updateCalibrationDisplay();
 
-        // Si el tab de desempeño está abierto, actualizar
         if (document.getElementById('section-performance')?.classList.contains('active')) {
             renderPerformance();
         }
@@ -1200,4 +1260,297 @@ function updateCalibrationDisplay() {
 
     const savedAt = resultsManager?._calibration?.savedAt;
     el('calLastUpdate', savedAt ? new Date(savedAt).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' }) : '—');
+}
+
+// ============================================================
+// FASE 7 — VARIABLES CONTEXTUALES
+// Lee los valores del panel de factores contextuales en la UI
+// ============================================================
+function getContextualFactors() {
+    const getValue = (id, defaultVal = 0) => {
+        const el = document.getElementById(id);
+        return el ? (parseFloat(el.value) || defaultVal) : defaultVal;
+    };
+    const getCheck = (id) => {
+        const el = document.getElementById(id);
+        return el ? el.checked : false;
+    };
+
+    return {
+        teamA: {
+            injuredStars:   getValue('ctx-inj-a'),
+            suspendedKey:   getValue('ctx-sus-a'),
+            restDays:       getValue('ctx-rest-a', 7),
+            altitudeEffect: false,  // Solo aplica al visitante
+        },
+        teamB: {
+            injuredStars:   getValue('ctx-inj-b'),
+            suspendedKey:   getValue('ctx-sus-b'),
+            restDays:       getValue('ctx-rest-b', 7),
+            altitudeEffect: getCheck('ctx-altitude'),
+            weatherPenalty: getValue('ctx-weather') / 100
+        },
+        altitude: getCheck('ctx-altitude'),
+        weather:  getValue('ctx-weather')
+    };
+}
+
+// Memoria para revertir ajustes contextuales de ELO
+let _eloBackup = {};
+
+/**
+ * Aplica ajustes de ELO temporales basados en factores contextuales.
+ * Fórmula: cada jugador clave lesionado = -20 ELO (max -60 total)
+ * Esto asegura impacto acotado y reversible.
+ */
+function applyContextualEloAdjustment(teamA, teamB, factors) {
+    _eloBackup = {};
+    if (!engine || !engine.teams) return;
+
+    const adjust = (teamName, teamFactors, isHome) => {
+        if (!engine.teams[teamName]) return;
+        const original = engine.teams[teamName].eloRating;
+        _eloBackup[teamName] = original;
+
+        let delta = 0;
+        // Lesiones: cada estrella = -20 ELO (máx -60)
+        delta -= Math.min(3, teamFactors.injuredStars || 0) * 20;
+        // Sanciones: -15 por suspendido clave (máx -30)
+        delta -= Math.min(2, teamFactors.suspendedKey || 0) * 15;
+        // Altitud (visitante): -25 ELO
+        if (!isHome && (factors.altitude || teamFactors.altitudeEffect)) delta -= 25;
+        // Fatiga (<4 días descanso): -15 ELO
+        if ((teamFactors.restDays || 7) < 4) delta -= 15;
+
+        // Capping: máximo ±60 ELO de ajuste contextual
+        const cappedDelta = Math.max(-60, Math.min(0, delta));
+        if (cappedDelta !== 0) {
+            engine.teams[teamName].eloRating = original + cappedDelta;
+            engine._strengthCache = {};
+        }
+    };
+
+    adjust(teamA, factors.teamA, true);
+    adjust(teamB, factors.teamB, false);
+}
+
+function revertContextualEloAdjustment(teamA, teamB) {
+    if (_eloBackup[teamA] && engine.teams[teamA]) {
+        engine.teams[teamA].eloRating = _eloBackup[teamA];
+    }
+    if (_eloBackup[teamB] && engine.teams[teamB]) {
+        engine.teams[teamB].eloRating = _eloBackup[teamB];
+    }
+    engine._strengthCache = {};
+    _eloBackup = {};
+}
+
+// ============================================================
+// FASE 8-9 — INTEGRACIÓN GEMINI IA
+// ============================================================
+
+/**
+ * Lanza el análisis Gemini en background tras una predicción.
+ * Siempre muestra el tab de IA disponible; el análisis llega de forma asíncrona.
+ */
+async function triggerAIAnalysis(teamA, teamB, prediction, contextFactors = {}) {
+    // Generar clave de cache
+    const cacheKey = `${teamA}_${teamB}_${prediction.winA}`;
+
+    // Preparar el tab de IA para mostrar loading
+    const aiSection = document.getElementById('section-ai-analysis');
+    if (aiSection) {
+        showAILoading(teamA, teamB, prediction);
+        // Activar el badge del tab
+        const aiTab = document.querySelector('[data-tab="ai-analysis"]');
+        if (aiTab) aiTab.classList.add('tab-new-data');
+    }
+
+    // Si ya tenemos análisis en cache, usarlo
+    if (_aiAnalysisCache[cacheKey]) {
+        renderAIAnalysis(_aiAnalysisCache[cacheKey]);
+        return;
+    }
+
+    // Cancelar petición anterior si existe
+    if (_aiAnalysisAbort) _aiAnalysisAbort.abort();
+    _aiAnalysisAbort = new AbortController();
+
+    try {
+        // Construir descripción de factores contextuales para Gemini
+        const contextualDesc = {};
+        if (contextFactors.teamA?.injuredStars > 0) {
+            contextualDesc[`Lesiones ${teamA}`] = `${contextFactors.teamA.injuredStars} jugador(es) clave`;
+        }
+        if (contextFactors.teamB?.injuredStars > 0) {
+            contextualDesc[`Lesiones ${teamB}`] = `${contextFactors.teamB.injuredStars} jugador(es) clave`;
+        }
+        if (contextFactors.altitude) {
+            contextualDesc['Altitud'] = 'Sede a >2000m — desventaja visitante';
+        }
+
+        const payload = {
+            teamA,
+            teamB,
+            prediction: {
+                winA:            prediction.winA,
+                draw:            prediction.draw,
+                winB:            prediction.winB,
+                mostLikelyScore: prediction.mostLikelyScore,
+                lambdaA:         prediction.lambdaA,
+                lambdaB:         prediction.lambdaB,
+                topScores:       prediction.topScores,
+                over25:          prediction.over25,
+                btts:            prediction.btts,
+                eloDiff:         prediction.eloDiff
+            },
+            contextualFactors: contextualDesc
+        };
+
+        const response = await fetch('/api/analyze', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+            signal: _aiAnalysisAbort.signal
+        });
+
+        const data = await response.json();
+
+        if (!response.ok || data.error) {
+            throw new Error(data.error || `HTTP ${response.status}`);
+        }
+
+        // Guardar en cache
+        _aiAnalysisCache[cacheKey] = data;
+        renderAIAnalysis(data);
+
+    } catch (err) {
+        if (err.name === 'AbortError') return; // Cancelado por el usuario
+        showAIError(err.message, teamA, teamB, prediction, contextFactors);
+    }
+}
+
+/** Muestra estado de carga del análisis IA */
+function showAILoading(teamA, teamB, prediction) {
+    const container = document.getElementById('ai-analysis-content');
+    if (!container) return;
+
+    const dataA = WORLD_CUP_DATA?.teams[teamA];
+    const dataB = WORLD_CUP_DATA?.teams[teamB];
+
+    container.innerHTML = `
+        <div class="ai-match-header">
+            <div class="ai-team-badge">${dataA?.flagHtml || '🏳️'} <strong>${teamA}</strong></div>
+            <div class="ai-prob-trio">
+                <div class="ai-prob-item win-a">
+                    <div class="ai-prob-pct">${prediction.winA}%</div>
+                    <div class="ai-prob-lbl">Victoria</div>
+                </div>
+                <div class="ai-prob-item draw-v">
+                    <div class="ai-prob-pct">${prediction.draw}%</div>
+                    <div class="ai-prob-lbl">Empate</div>
+                </div>
+                <div class="ai-prob-item win-b">
+                    <div class="ai-prob-pct">${prediction.winB}%</div>
+                    <div class="ai-prob-lbl">Victoria</div>
+                </div>
+            </div>
+            <div class="ai-team-badge"><strong>${teamB}</strong> ${dataB?.flagHtml || '🏳️'}</div>
+        </div>
+        <div class="ai-score-chip">⚽ Marcador más probable: <strong>${prediction.mostLikelyScore}</strong></div>
+        <div class="ai-loading-state">
+            <div class="ai-spinner-wrap">
+                <div class="ai-gemini-orb"></div>
+                <div class="ai-loading-text">Gemini está analizando el partido...</div>
+                <div class="ai-loading-sub">Procesando datos del motor Poisson-Dixon-Coles</div>
+            </div>
+        </div>
+    `;
+}
+
+/** Renderiza el análisis de Gemini como HTML formateado */
+function renderAIAnalysis(data) {
+    const container = document.getElementById('ai-analysis-content');
+    if (!container) return;
+
+    const { teamA, teamB, analysis, probabilities, generatedAt, model, fromCache } = data;
+    const dataA = WORLD_CUP_DATA?.teams[teamA];
+    const dataB = WORLD_CUP_DATA?.teams[teamB];
+
+    // Convertir markdown básico a HTML
+    const mdToHtml = (text) => {
+        if (!text) return '';
+        return text
+            .replace(/^## (.+)$/gm, '<h3 class="ai-section-h">$1</h3>')
+            .replace(/^### (.+)$/gm, '<h4 class="ai-section-h4">$1</h4>')
+            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+            .replace(/\*(.+?)\*/g, '<em>$1</em>')
+            .replace(/^- (.+)$/gm, '<li>$1</li>')
+            .replace(/(<li>.*<\/li>\n?)+/g, '<ul class="ai-list">$&</ul>')
+            .replace(/\n\n/g, '</p><p class="ai-para">')
+            .replace(/^(?!<[hul])(.+)$/gm, '<p class="ai-para">$1</p>')
+            .replace(/<p class="ai-para"><\/p>/g, '');
+    };
+
+    const timeStr = generatedAt ? new Date(generatedAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : '';
+    const cacheTag = fromCache ? '<span class="ai-cache-badge">📦 Desde caché</span>' : '';
+
+    container.innerHTML = `
+        <div class="ai-match-header">
+            <div class="ai-team-badge">${dataA?.flagHtml || '🏳️'} <strong>${teamA}</strong></div>
+            <div class="ai-prob-trio">
+                <div class="ai-prob-item win-a">
+                    <div class="ai-prob-pct">${probabilities?.winA ?? '—'}%</div>
+                    <div class="ai-prob-lbl">Victoria</div>
+                </div>
+                <div class="ai-prob-item draw-v">
+                    <div class="ai-prob-pct">${probabilities?.draw ?? '—'}%</div>
+                    <div class="ai-prob-lbl">Empate</div>
+                </div>
+                <div class="ai-prob-item win-b">
+                    <div class="ai-prob-pct">${probabilities?.winB ?? '—'}%</div>
+                    <div class="ai-prob-lbl">Victoria</div>
+                </div>
+            </div>
+            <div class="ai-team-badge"><strong>${teamB}</strong> ${dataB?.flagHtml || '🏳️'}</div>
+        </div>
+        <div class="ai-score-chip">⚽ Marcador más probable: <strong>${probabilities?.mostLikelyScore || '—'}</strong></div>
+        <div class="ai-meta-row">
+            <span class="ai-model-badge">🤖 ${model || 'gemini-2.0-flash'}</span>
+            ${timeStr ? `<span class="ai-time-badge">🕐 ${timeStr}</span>` : ''}
+            ${cacheTag}
+        </div>
+        <div class="ai-analysis-body">
+            ${mdToHtml(analysis)}
+        </div>
+    `;
+
+    // Quitar badge del tab
+    const aiTab = document.querySelector('[data-tab="ai-analysis"]');
+    if (aiTab) aiTab.classList.remove('tab-new-data');
+}
+
+/** Muestra estado de error con botón de reintento */
+function showAIError(errorMsg, teamA, teamB, prediction, contextFactors) {
+    const container = document.getElementById('ai-analysis-content');
+    if (!container) return;
+
+    const isNoKey = errorMsg?.includes('MISSING_API_KEY') || errorMsg?.includes('no configurado');
+
+    container.innerHTML = `
+        <div class="ai-error-state">
+            <div style="font-size:3rem;margin-bottom:1rem">${isNoKey ? '🔑' : '⚠️'}</div>
+            <h3>${isNoKey ? 'Análisis IA no configurado' : 'Error al generar análisis'}</h3>
+            <p style="color:var(--text-muted);font-size:0.9rem;max-width:500px;margin:0.5rem auto 1.5rem">
+                ${isNoKey
+                    ? 'La variable GEMINI_API_KEY no está configurada en Vercel. Consulta DEPLOY.md para instrucciones.'
+                    : `${errorMsg || 'Error desconocido'}. El servidor Gemini puede estar temporalmente no disponible.`
+                }
+            </p>
+            ${!isNoKey ? `
+            <button class="predict-btn" onclick="triggerAIAnalysis('${teamA}', '${teamB}', _currentPredictionForAI?.result || {}, {})" style="max-width:200px">
+                🔄 Reintentar
+            </button>` : ''}
+        </div>
+    `;
 }

@@ -378,6 +378,179 @@ class ResultsManager {
 
         return { success: true };
     }
+
+    // ============================================================
+    // FASE 6 — APRENDIZAJE COMPARTIDO (BACKEND SYNC)
+    // Nuevos métodos — no modifican la API existente
+    // ============================================================
+
+    /**
+     * Intenta sincronizar un resultado con el backend compartido.
+     * Si el backend no está disponible, el resultado ya fue guardado
+     * en localStorage por addResult(), así que no hay pérdida de datos.
+     *
+     * @param {Object} params - Mismo objeto que addResult()
+     * @param {Object} prediction - Predicción previa (opcional)
+     * @returns {Promise<Object>} Respuesta del backend o { local: true }
+     */
+    async syncResultWithBackend(params, prediction = null) {
+        try {
+            const payload = {
+                ...params,
+                predictionWinA:  prediction?.winA  ?? null,
+                predictionDraw:  prediction?.draw  ?? null,
+                predictionWinB:  prediction?.winB  ?? null
+            };
+
+            const response = await fetch('/api/results', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+                signal: AbortSignal.timeout(8000) // 8s timeout
+            });
+
+            if (!response.ok) throw new Error(`Backend HTTP ${response.status}`);
+            const data = await response.json();
+
+            // Si el backend devuelve ELO actualizados, guardar en calibración local
+            if (data.calibration?.eloSnapshot) {
+                this._calibration = {
+                    ...(this._calibration || {}),
+                    ...data.calibration,
+                    savedAt: new Date().toISOString(),
+                    source: 'backend_shared'
+                };
+                this._save(this.STORAGE_KEY_CALIBRATION, this._calibration);
+            }
+
+            console.log(`[ResultsManager] Sincronizado con backend (modo: ${data.storageMode})`);
+            return { backend: true, data };
+        } catch (e) {
+            console.warn('[ResultsManager] Backend no disponible, usando solo localStorage:', e.message);
+            return { local: true, error: e.message };
+        }
+    }
+
+    /**
+     * Extensión de addResult() que además sincroniza con el backend.
+     * La API local (addResult) es la fuente primaria y siempre funciona.
+     * El backend es un bonus que mejora el aprendizaje compartido.
+     *
+     * @param {Object} params - { teamA, teamB, goalsA, goalsB, date, competition, stage }
+     * @param {PredictionEngine} engine - instancia del motor
+     * @returns {Promise<Object>} resultado + info de sincronización
+     */
+    async addResultAndSync(params, engine) {
+        // 1. Guardar localmente PRIMERO (siempre funciona)
+        const localResult = this.addResult(params, engine);
+        if (localResult.error) return localResult;
+
+        // 2. Intentar sincronizar con backend (best-effort)
+        const matchedPred = this._predictions.find(p =>
+            p.teamA === params.teamA && p.teamB === params.teamB && p.resolved
+        );
+        const syncResult = await this.syncResultWithBackend(params, matchedPred?.prediction || null);
+
+        return {
+            ...localResult,
+            sync: syncResult
+        };
+    }
+
+    /**
+     * Carga el estado del modelo compartido desde el backend.
+     * Si hay estado más reciente que el local, lo aplica al engine.
+     *
+     * @param {PredictionEngine} engine - instancia del motor
+     * @returns {Promise<{ applied: boolean, source: string }>}
+     */
+    async loadSharedState(engine) {
+        try {
+            const response = await fetch('/api/model-state', {
+                signal: AbortSignal.timeout(5000)
+            });
+
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const { calibration, meta } = await response.json();
+
+            if (!calibration || !meta?.sharedLearning) {
+                return { applied: false, source: 'backend_no_kv' };
+            }
+
+            // Solo aplicar si hay más partidos procesados que el estado local
+            const localN = engine._calibration?.matchesProcessed || 0;
+            const remoteN = calibration.matchesProcessed || 0;
+
+            if (remoteN > localN) {
+                // Aplicar calibración del backend al engine
+                engine._calibration = {
+                    eloLearningRate:  calibration.eloLearningRate  || 20,
+                    lambdaAdjustment: calibration.lambdaAdjustment || 1.0,
+                    rhoDynamic:       calibration.rhoDynamic       || -0.08,
+                    matchesProcessed: calibration.matchesProcessed || 0,
+                    biasCorrection:   calibration.biasCorrection   || 0.0
+                };
+
+                // Aplicar ELO snapshot si existe
+                if (calibration.eloSnapshot) {
+                    Object.entries(calibration.eloSnapshot).forEach(([name, elo]) => {
+                        if (engine.teams[name]) engine.teams[name].eloRating = elo;
+                    });
+                }
+
+                engine._strengthCache = {};
+                console.log(`[ResultsManager] Estado compartido aplicado: ${remoteN} partidos procesados remotamente`);
+                return { applied: true, source: 'backend_shared', matchesProcessed: remoteN };
+            }
+
+            return { applied: false, source: 'local_more_recent', localN, remoteN };
+        } catch (e) {
+            console.warn('[ResultsManager] No se pudo cargar estado compartido:', e.message);
+            return { applied: false, source: 'backend_unavailable' };
+        }
+    }
+
+    /**
+     * Intenta cargar datos frescos del backend (ELO y forma reciente)
+     * y aplicarlos al objeto de datos del engine.
+     *
+     * @param {Object} worldCupData - Objeto de datos principal (data.json)
+     * @returns {Promise<{ updated: number, source: string }>}
+     */
+    async loadLiveData(worldCupData) {
+        try {
+            const response = await fetch('/api/update-live-data', {
+                signal: AbortSignal.timeout(10000)
+            });
+
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            const { teamUpdates, summary } = await response.json();
+
+            if (!teamUpdates) throw new Error('Sin datos de actualización');
+
+            let updated = 0;
+            Object.entries(teamUpdates).forEach(([teamName, update]) => {
+                if (!worldCupData.teams[teamName]) return;
+
+                // Actualizar ELO si la fuente tiene datos más recientes
+                if (update.eloRating && update.eloSource !== 'data_json') {
+                    worldCupData.teams[teamName].eloRating = update.eloRating;
+                    updated++;
+                }
+
+                // Actualizar forma reciente si se obtuvo de API externa
+                if (update.recentForm && update.recentFormSource) {
+                    worldCupData.teams[teamName].recentForm = update.recentForm;
+                }
+            });
+
+            console.log(`[ResultsManager] Datos en vivo: ${updated} equipos con ELO actualizado`);
+            return { updated, source: 'live_api', summary };
+        } catch (e) {
+            console.warn('[ResultsManager] Datos en vivo no disponibles, usando data.json:', e.message);
+            return { updated: 0, source: 'data_json_fallback' };
+        }
+    }
 }
 
 // Instancia global (accesible desde app.js)

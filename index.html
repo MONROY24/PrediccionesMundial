@@ -351,6 +351,235 @@
             pointer-events: none;
             z-index: 10;
         }
+        /* ── Variables Contextuales (Fase 7) ── */
+        .contextual-panel {
+            margin-top: 1.2rem;
+            border: 1px solid var(--border-glass);
+            border-radius: 10px;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+        .contextual-toggle {
+            width: 100%;
+            text-align: left;
+            background: var(--bg-glass);
+            border: none;
+            color: var(--text-secondary);
+            padding: 0.75rem 1rem;
+            cursor: pointer;
+            font-family: 'Outfit', sans-serif;
+            font-size: 0.85rem;
+            font-weight: 600;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: background 0.2s;
+        }
+        .contextual-toggle:hover { background: rgba(255,255,255,0.06); }
+        .contextual-body {
+            display: none;
+            padding: 1rem;
+            background: rgba(15,23,42,0.7);
+            gap: 1rem;
+        }
+        .contextual-body.open { display: grid; grid-template-columns: 1fr 1fr; }
+        @media (max-width: 600px) { .contextual-body.open { grid-template-columns: 1fr; } }
+        .ctx-group label {
+            display: block;
+            font-size: 0.73rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.7px;
+            margin-bottom: 0.3rem;
+        }
+        .ctx-group input[type=number], .ctx-group input[type=range] {
+            width: 100%;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-glass);
+            color: white;
+            padding: 0.4rem 0.6rem;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            box-sizing: border-box;
+        }
+        .ctx-group .ctx-check-row {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-top: 0.5rem;
+        }
+        .ctx-group input[type=checkbox] { width: 16px; height: 16px; accent-color: var(--accent-primary-light); }
+        .ctx-full-row { grid-column: 1 / -1; }
+        .ctx-divider {
+            grid-column: 1 / -1;
+            border: none;
+            border-top: 1px solid var(--border-glass);
+            margin: 0.2rem 0;
+        }
+        .ctx-team-label {
+            grid-column: 1 / -1;
+            font-size: 0.78rem;
+            font-weight: 700;
+            color: var(--accent-primary-light);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 0.2rem;
+        }
+
+        /* ── Análisis IA (Fase 9) ── */
+        .ai-match-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 1.2rem;
+            background: linear-gradient(135deg, rgba(99,102,241,0.15), rgba(139,92,246,0.10));
+            border-radius: 12px;
+            border: 1px solid rgba(99,102,241,0.25);
+            margin-bottom: 1rem;
+            flex-wrap: wrap;
+        }
+        .ai-team-badge {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 1rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+        .ai-prob-trio {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+        }
+        .ai-prob-item {
+            text-align: center;
+            padding: 0.5rem 0.8rem;
+            border-radius: 8px;
+            min-width: 65px;
+        }
+        .ai-prob-item.win-a { background: rgba(34,197,94,0.15); border: 1px solid rgba(34,197,94,0.3); }
+        .ai-prob-item.draw-v { background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.3); }
+        .ai-prob-item.win-b { background: rgba(239,68,68,0.15); border: 1px solid rgba(239,68,68,0.3); }
+        .ai-prob-pct { font-size: 1.3rem; font-weight: 800; color: var(--text-primary); }
+        .ai-prob-lbl { font-size: 0.65rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+        .ai-score-chip {
+            text-align: center;
+            padding: 0.5rem 1rem;
+            background: rgba(245,158,11,0.1);
+            border: 1px solid rgba(245,158,11,0.25);
+            border-radius: 8px;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+        }
+        .ai-meta-row {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            margin-bottom: 1.2rem;
+        }
+        .ai-model-badge, .ai-time-badge, .ai-cache-badge {
+            padding: 0.25rem 0.65rem;
+            border-radius: 20px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            background: rgba(99,102,241,0.15);
+            color: var(--accent-primary-light);
+            border: 1px solid rgba(99,102,241,0.25);
+        }
+        .ai-cache-badge { background: rgba(34,197,94,0.1); color: #4ade80; border-color: rgba(34,197,94,0.2); }
+        .ai-loading-state {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 3rem 1rem;
+        }
+        .ai-spinner-wrap {
+            text-align: center;
+        }
+        @keyframes gemini-pulse {
+            0%,100% { transform: scale(1); opacity: 0.8; box-shadow: 0 0 20px rgba(99,102,241,0.4); }
+            50% { transform: scale(1.2); opacity: 1; box-shadow: 0 0 40px rgba(139,92,246,0.7); }
+        }
+        .ai-gemini-orb {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #6366f1, #8b5cf6, #a855f7);
+            margin: 0 auto 1rem;
+            animation: gemini-pulse 2s ease-in-out infinite;
+        }
+        .ai-loading-text {
+            font-size: 1rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 0.3rem;
+        }
+        .ai-loading-sub {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+        .ai-analysis-body {
+            line-height: 1.75;
+            color: var(--text-primary);
+            font-size: 0.93rem;
+        }
+        .ai-section-h {
+            color: var(--accent-primary-light);
+            font-size: 1rem;
+            font-weight: 700;
+            margin: 1.5rem 0 0.6rem;
+            padding-bottom: 0.3rem;
+            border-bottom: 1px solid var(--border-glass);
+        }
+        .ai-section-h4 { color: var(--text-secondary); font-size: 0.9rem; margin: 1rem 0 0.4rem; }
+        .ai-para { margin-bottom: 0.8rem; color: var(--text-secondary); }
+        .ai-list { padding-left: 1.2rem; margin: 0.5rem 0 1rem; }
+        .ai-list li { margin-bottom: 0.4rem; color: var(--text-secondary); }
+        .ai-error-state {
+            text-align: center;
+            padding: 3rem 1rem;
+            color: var(--text-muted);
+        }
+        .ai-empty-state {
+            text-align: center;
+            padding: 4rem 1rem;
+        }
+        /* Tab badge para notificar nuevo contenido */
+        .tab-new-data {
+            position: relative;
+        }
+        .tab-new-data::after {
+            content: '';
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            width: 8px;
+            height: 8px;
+            background: #f59e0b;
+            border-radius: 50%;
+            animation: gemini-pulse 1.5s infinite;
+        }
+        /* Badge de datos en vivo */
+        #liveDataBadge {
+            position: fixed;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: linear-gradient(90deg, #ef4444, #f97316);
+            color: white;
+            padding: 0.4rem 1.2rem;
+            border-radius: 20px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            z-index: 1000;
+            opacity: 0;
+            transition: opacity 1s ease;
+            pointer-events: none;
+            letter-spacing: 0.5px;
+        }
     </style>
 </head>
 <body>
@@ -362,9 +591,9 @@
     <div class="app-container">
         <!-- HERO -->
         <header class="hero">
-            <div class="hero-badge"><span class="pulse-dot"></span> Modelo v5.0 — Aprendizaje Incremental Activo</div>
+            <div class="hero-badge"><span class="pulse-dot"></span> Modelo v6.0 — Gemini IA + Datos en Vivo + Aprendizaje Compartido</div>
             <h1>Predictor Mundial 2026</h1>
-            <p>Motor matemático: ELO · Poisson · Dixon-Coles · Monte Carlo · Online Learning</p>
+            <p>Motor matemático: ELO · Poisson · Dixon-Coles · Monte Carlo · Gemini AI</p>
             <div class="hero-flags" id="heroFlags" style="display:flex; justify-content:center; gap:15px; margin-top:15px;"></div>
         </header>
 
@@ -376,6 +605,7 @@
             <button class="nav-tab" data-tab="simulation">🎲 Simulación</button>
             <button class="nav-tab" data-tab="results">📝 Resultados</button>
             <button class="nav-tab" data-tab="performance">📈 Desempeño</button>
+            <button class="nav-tab" data-tab="ai-analysis">🤖 Análisis IA</button>
             <button class="nav-tab" data-tab="methodology">🧮 Metodología</button>
         </nav>
 
@@ -416,7 +646,7 @@
                     </div>
                 </div>
                 <div style="display:flex;gap:1rem;margin-top:1.5rem">
-                    <button class="predict-btn" id="predictBtn" style="flex:1">🔮 Ejecutar Predicción Matemática</button>
+                    <button class="predict-btn" id="predictBtn" style="flex:1">🔮 Ejecutar Predicción + Análisis IA</button>
                     <button class="predict-btn" id="shareBtn" style="flex:0;min-width:50px;background:var(--bg-glass)" title="Copiar enlace para compartir">🔗</button>
                     <button class="predict-btn" id="exportBtn" style="flex:0;min-width:50px;background:var(--bg-glass)" title="Descargar predicción como imagen">📸</button>
                 </div>
@@ -639,6 +869,81 @@
         </section>
 
         <!-- ══════════════════════════════════════════════════
+             ANÁLISIS IA (FASE 8-9)
+             ══════════════════════════════════════════════════ -->
+        <section class="section" id="section-ai-analysis">
+            <h2 class="section-title"><span class="icon">🤖</span> Análisis Inteligente — Gemini AI</h2>
+
+            <!-- Panel de Variables Contextuales (Fase 7) -->
+            <div class="glass-card" style="margin-bottom:1.5rem;">
+                <div class="contextual-panel">
+                    <button class="contextual-toggle" onclick="this.nextElementSibling.classList.toggle('open')">
+                        🎛️ Variables Contextuales (Factores Avanzados)
+                        <span style="margin-left:auto;font-size:0.75rem;opacity:0.6">Clic para expandir</span>
+                    </button>
+                    <div class="contextual-body">
+                        <div class="ctx-team-label">⬆️ Equipo A (Local)</div>
+                        <div class="ctx-group">
+                            <label>Lesiones de estrellas clave (0–3)</label>
+                            <input type="number" id="ctx-inj-a" min="0" max="3" value="0" placeholder="0">
+                        </div>
+                        <div class="ctx-group">
+                            <label>Suspendidos importantes (0–2)</label>
+                            <input type="number" id="ctx-sus-a" min="0" max="2" value="0" placeholder="0">
+                        </div>
+                        <div class="ctx-group">
+                            <label>Días de descanso (0–14)</label>
+                            <input type="number" id="ctx-rest-a" min="0" max="14" value="7" placeholder="7">
+                        </div>
+                        <hr class="ctx-divider">
+                        <div class="ctx-team-label">⬇️ Equipo B (Visitante)</div>
+                        <div class="ctx-group">
+                            <label>Lesiones de estrellas clave (0–3)</label>
+                            <input type="number" id="ctx-inj-b" min="0" max="3" value="0" placeholder="0">
+                        </div>
+                        <div class="ctx-group">
+                            <label>Suspendidos importantes (0–2)</label>
+                            <input type="number" id="ctx-sus-b" min="0" max="2" value="0" placeholder="0">
+                        </div>
+                        <div class="ctx-group">
+                            <label>Días de descanso (0–14)</label>
+                            <input type="number" id="ctx-rest-b" min="0" max="14" value="7" placeholder="7">
+                        </div>
+                        <hr class="ctx-divider">
+                        <div class="ctx-group ctx-full-row">
+                            <label>Condiciones de Partido</label>
+                            <div class="ctx-check-row">
+                                <input type="checkbox" id="ctx-altitude">
+                                <label style="text-transform:none;font-size:0.85rem;margin:0">🏔️ Sede en alta altitud (&gt;2000m) — afecta al visitante</label>
+                            </div>
+                            <div style="margin-top:0.5rem">
+                                <label>🌡️ Impacto climático (0=normal, 100=extremo)</label>
+                                <input type="range" id="ctx-weather" min="0" max="100" value="0" style="margin-top:0.3rem">
+                            </div>
+                        </div>
+                        <div class="ctx-full-row" style="font-size:0.75rem;color:var(--text-muted);padding:0.3rem 0">
+                            ⚠️ Impacto máximo acotado: ±15% sobre lambda (Poisson-Dixon-Coles siempre es el núcleo principal)
+                        </div>
+                    </div>
+                </div>
+                <p style="font-size:0.8rem;color:var(--text-muted);margin-top:0.8rem;text-align:center">
+                    💡 Configura los factores arriba y ejecuta una predicción en la tab ⚡ Predictor. El análisis IA aparecerá aquí automáticamente.
+                </p>
+            </div>
+
+            <!-- Contenido del análisis (se rellena desde app.js) -->
+            <div class="glass-card" id="ai-analysis-content">
+                <div class="ai-empty-state">
+                    <div style="font-size:4rem;margin-bottom:1rem">🤖</div>
+                    <h3 style="color:var(--text-secondary);margin-bottom:0.5rem">Análisis IA listo</h3>
+                    <p style="color:var(--text-muted);font-size:0.9rem;max-width:400px;margin:0 auto">
+                        Ejecuta una predicción en la tab <strong>⚡ Predictor</strong> para que Gemini genere un análisis experto del partido en tiempo real.
+                    </p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════
              METODOLOGÍA
              ══════════════════════════════════════════════════ -->
         <section class="section" id="section-methodology">
@@ -671,17 +976,20 @@
         <footer class="app-footer" style="display:flex; flex-direction:row; justify-content:space-between; align-items:center; padding: 40px 30px; margin-top: 50px; border-top: 1px solid var(--border-glass); background:var(--bg-glass); border-radius:16px; box-shadow:var(--shadow-md); flex-wrap: wrap;">
             <div style="flex: 1; text-align: left; min-width: 250px;">
                 <p style="font-size: 1.15rem; color: var(--text-primary); margin:0; font-weight: 600;">Desarrollado por <strong style="color:var(--accent-primary-light);">MR24</strong></p>
-                <p style="font-size: 0.9rem; color: var(--text-muted); margin:0; margin-top:5px;">© 2026 Predictor Mundial — Motor v5.0</p>
+                <p style="font-size: 0.9rem; color: var(--text-muted); margin:0; margin-top:5px;">© 2026 Predictor Mundial — Motor v6.0 + Gemini AI</p>
             </div>
             <div style="flex: 1; display:flex; justify-content:center; min-width: 150px; margin: 15px 0;">
                 <img src="MR24.png" alt="MR24 Logo" onerror="this.style.display='none'" style="width: 110px; height: 110px; border-radius: 20px; object-fit:cover; filter: drop-shadow(0 6px 15px rgba(0,0,0,0.8)); border: 3px solid var(--border-glass); transition: transform 0.3s ease;">
             </div>
             <div style="flex: 1; text-align: right; min-width: 250px; font-size: 0.9rem; color: var(--text-muted); font-family: 'Outfit', sans-serif; opacity: 0.8;">
-                <span style="font-weight:bold; color:var(--text-secondary);">Motor Matemático v5.0</span><br>
-                ELO · Poisson Exponencial · Dixon-Coles · Monte Carlo · Online Learning
+                <span style="font-weight:bold; color:var(--text-secondary);">Motor Matemático v6.0</span><br>
+                ELO · Poisson · Dixon-Coles · Monte Carlo · Gemini AI
             </div>
         </footer>
     </div>
+
+    <!-- Badge de datos en vivo -->
+    <div id="liveDataBadge"></div>
 
     <script src="engine.js"></script>
     <script src="results.js"></script>
