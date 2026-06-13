@@ -1506,7 +1506,7 @@ function showAILoading(teamA, teamB, prediction) {
         <div class="ai-score-chip">⚽ Marcador más probable: <strong>${prediction.mostLikelyScore}</strong></div>
         <div class="ai-loading-state">
             <div class="ai-spinner-wrap">
-                <div class="ai-gemini-orb"></div>
+                <img src="MR24.png" alt="Cargando" class="ai-custom-logo" />
                 <div class="ai-loading-text">Gemini está analizando el partido...</div>
                 <div class="ai-loading-sub">Procesando datos del motor Poisson-Dixon-Coles</div>
             </div>

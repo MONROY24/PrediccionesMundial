@@ -503,13 +503,14 @@
             0%,100% { transform: scale(1); opacity: 0.8; box-shadow: 0 0 20px rgba(99,102,241,0.4); }
             50% { transform: scale(1.2); opacity: 1; box-shadow: 0 0 40px rgba(139,92,246,0.7); }
         }
-        .ai-gemini-orb {
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            background: linear-gradient(135deg, #6366f1, #8b5cf6, #a855f7);
+        .ai-custom-logo {
+            width: 80px;
+            height: 80px;
+            border-radius: 15px;
+            object-fit: cover;
             margin: 0 auto 1rem;
             animation: gemini-pulse 2s ease-in-out infinite;
+            filter: drop-shadow(0 0 10px rgba(99,102,241,0.5));
         }
         .ai-loading-text {
             font-size: 1rem;
