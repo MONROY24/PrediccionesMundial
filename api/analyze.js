@@ -10,7 +10,7 @@
 
 const https = require('https');
 
-// Modelo Gemini — gemini-2.0-flash: rápido, gratuito, multilingüe
+// Modelo Gemini — gemini-2.5-flash: requerido por nuevas políticas Google AI Studio
 const GEMINI_MODEL = 'gemini-2.5-flash';
 
 // Cache en memoria para evitar llamadas duplicadas por el mismo partido
@@ -46,68 +46,28 @@ function buildPrompt(teamA, teamB, prediction, contextualFactors = {}) {
           }`
         : '';
 
-    return `Eres el analista jefe de fútbol internacional del Predictor Mundial 2026, con acceso al motor matemático más avanzado disponible. Tu análisis debe ser experto, apasionado y preciso.
+    return `Eres analista experto del Mundial FIFA 2026. Responde en español con markdown. Sé directo y conciso.
 
-═══════════════════════════════════════
-DATOS DEL PARTIDO — MUNDIAL FIFA 2026
-═══════════════════════════════════════
-Partido: ${teamA} vs ${teamB}
+PARTIDO: ${teamA} vs ${teamB}
+PROBABILIDADES: ${teamA} ${winA}% | Empate ${draw}% | ${teamB} ${winB}%
+GOLES ESPERADOS: λ${teamA}=${lambdaA} | λ${teamB}=${lambdaB} | Total=${(parseFloat(lambdaA)+parseFloat(lambdaB)).toFixed(2)}
+MARCADORES PROBABLES: ${topScoresText}
+Over 2.5: ${over25}% | BTTS: ${btts}% | ELO: ${eloDiffText}${contextText}
 
-PROBABILIDADES (Motor Poisson-Dixon-Coles v5.0):
-  • Victoria ${teamA}: ${winA}%
-  • Empate: ${draw}%
-  • Victoria ${teamB}: ${winB}%
+Responde EXACTAMENTE con estas 4 secciones (máximo 380 palabras en total):
 
-GOLES ESPERADOS (λ de Poisson):
-  • λ${teamA} = ${lambdaA} goles
-  • λ${teamB} = ${lambdaB} goles
-  • Total esperado: ${(parseFloat(lambdaA) + parseFloat(lambdaB)).toFixed(2)} goles
+## 📋 Contexto del Partido
+[2 párrafos cortos: rivalidad histórica y qué está en juego en el Mundial 2026]
 
-MARCADORES MÁS PROBABLES:
-  ${topScoresText}
-
-MERCADOS DE APUESTA:
-  • Over 2.5 goles: ${over25}%
-  • Ambos Anotan (BTTS): ${btts}%
-
-CONTEXTO ELO:
-  ${eloDiffText}
-${contextText}
-
-═══════════════════════════════════════
-INSTRUCCIONES DE ANÁLISIS
-═══════════════════════════════════════
-
-Genera un informe completo en español con las siguientes secciones (usa markdown):
-
-## 📋 Análisis del Partido
-[3 párrafos: contexto histórico de este enfrentamiento, expectativas tácticas, 
-y qué define este partido en el Mundial 2026]
-
-## 💪 Fortalezas de ${teamA}
-[4 puntos específicos con datos concretos]
-
-## ⚠️ Debilidades de ${teamA}
-[2-3 puntos honestos]
-
-## 💪 Fortalezas de ${teamB}
-[4 puntos específicos con datos concretos]
-
-## ⚠️ Debilidades de ${teamB}
-[2-3 puntos honestos]
+## ⚖️ Análisis de Fuerzas
+**${teamA}:** [2 fortalezas clave] | [1 debilidad principal]
+**${teamB}:** [2 fortalezas clave] | [1 debilidad principal]
 
 ## 🔢 Por Qué Estas Probabilidades
-[Explica en términos accesibles por qué el modelo asigna ${winA}% a ${teamA}, 
-${draw}% empate y ${winB}% a ${teamB}. Relaciona con λ de Poisson]
+[1 párrafo: explica los % y los λ de Poisson de forma accesible]
 
-## 🎬 Escenarios Alternativos
-[3 escenarios: Sorpresa grande, Resultado esperado, Partido cerrado que va a penales]
-
-## 🏆 Veredicto del Analista
-[Un párrafo contundente y memorable con tu predicción final y por qué]
-
-Usa emojis estratégicamente. Sé específico, técnico pero accesible. Todo en español.
-Limita a ~800 palabras totales para mantener frescura y precisión.`;
+## 🏆 Veredicto Final
+[1 párrafo contundente con predicción y marcador más probable]`;
 }
 
 /**
@@ -122,7 +82,7 @@ function callGemini(prompt, apiKey) {
                 temperature: 0.75,
                 topK: 40,
                 topP: 0.95,
-                maxOutputTokens: 1800,
+                maxOutputTokens: 700,  // Reducido para tier gratuito Gemini + Vercel
             },
             safetySettings: [
                 { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_ONLY_HIGH' },
@@ -170,9 +130,9 @@ function callGemini(prompt, apiKey) {
         });
 
         req.on('error', (e) => reject(new Error(`Error de red al llamar Gemini: ${e.message}`)));
-        req.setTimeout(25000, () => {
+        req.setTimeout(9000, () => {
             req.destroy();
-            reject(new Error('Timeout: Gemini tardó más de 25 segundos'));
+            reject(new Error('Timeout: Gemini tardó más de 9 segundos'));
         });
 
         req.write(body);
