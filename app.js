@@ -1389,36 +1389,82 @@ async function triggerAIAnalysis(teamA, teamB, prediction, contextFactors = {}) 
             contextualDesc['Altitud'] = 'Sede a >2000m — desventaja visitante';
         }
 
-        const payload = {
+        const keyRes = await fetch('/api/get-key');
+        const keyData = await keyRes.json();
+        if (!keyRes.ok) throw new Error(keyData.error || 'Error configurando IA');
+        const GEMINI_API_KEY = keyData.key;
+        const GEMINI_MODEL = 'gemini-2.5-flash';
+
+        const { lambdaA, lambdaB, topScores = [], eloDiff } = prediction;
+        const eloStr = eloDiff > 0 ? `${teamA} superior por ${Math.abs(eloDiff)} ELO` : eloDiff < 0 ? `${teamB} superior por ${Math.abs(eloDiff)} ELO` : 'Equipos parejos';
+        const ctxStr = Object.entries(contextualDesc).filter(([,v])=>v).map(([k,v])=>`- ${k}: ${v}`).join('\n');
+        
+        const prompt = `Eres analista experto del Mundial FIFA 2026. Responde en español con markdown.
+PARTIDO: ${teamA} vs ${teamB}
+PROBABILIDADES: ${teamA} ${prediction.winA}% | Empate ${prediction.draw}% | ${teamB} ${prediction.winB}%
+GOLES ESPERADOS: λ${teamA}=${lambdaA} | λ${teamB}=${lambdaB} | Total=${(parseFloat(lambdaA)+parseFloat(lambdaB)).toFixed(2)}
+${ctxStr ? `\nCONTEXTO:\n${ctxStr}` : ''}
+Genera un análisis experto y exhaustivo. No tienes límite de palabras.`;
+
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+        let contents = [{ role: 'user', parts: [{ text: prompt }] }];
+        let finalAnalysis = "";
+        let finalFinishReason = "STOP";
+        let iterations = 0;
+        const MAX_ITERATIONS = 4;
+
+        while (iterations < MAX_ITERATIONS) {
+            iterations++;
+            const geminiReqBody = {
+                contents,
+                generationConfig: { temperature: 0.7, topK: 40, topP: 0.95, maxOutputTokens: 2048 },
+                safetySettings: [
+                    { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+                    { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+                    { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+                    { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }
+                ]
+            };
+
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(geminiReqBody),
+                signal: _aiAnalysisAbort.signal
+            });
+
+            const data = await response.json();
+            if (!response.ok) throw new Error(`Gemini API Error: ${data.error?.message || response.status}`);
+
+            const textChunk = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            const finishReason = data.candidates?.[0]?.finishReason;
+            
+            if (!textChunk) {
+                if (finalAnalysis === "") throw new Error(`Respuesta vacía de Gemini. Razón: ${finishReason || 'desconocida'}`);
+                break;
+            }
+
+            finalAnalysis += textChunk;
+            finalFinishReason = finishReason;
+
+            if (finishReason === 'MAX_TOKENS' && iterations < MAX_ITERATIONS) {
+                contents.push({ role: 'model', parts: [{ text: textChunk }] });
+                contents.push({ role: 'user', parts: [{ text: "Continúa el análisis exactamente donde te quedaste, de forma fluida, sin repetir el texto anterior." }] });
+            } else {
+                break;
+            }
+        }
+
+        const data = {
+            success: true,
+            analysis: finalAnalysis,
+            finishReason: finalFinishReason + ` (Iter: ${iterations})`,
             teamA,
             teamB,
-            prediction: {
-                winA:            prediction.winA,
-                draw:            prediction.draw,
-                winB:            prediction.winB,
-                mostLikelyScore: prediction.mostLikelyScore,
-                lambdaA:         prediction.lambdaA,
-                lambdaB:         prediction.lambdaB,
-                topScores:       prediction.topScores,
-                over25:          prediction.over25,
-                btts:            prediction.btts,
-                eloDiff:         prediction.eloDiff
-            },
-            contextualFactors: contextualDesc
+            probabilities: prediction,
+            generatedAt: new Date().toISOString(),
+            model: GEMINI_MODEL
         };
-
-        const response = await fetch('/api/analyze', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload),
-            signal: _aiAnalysisAbort.signal
-        });
-
-        const data = await response.json();
-
-        if (!response.ok || data.error) {
-            throw new Error(data.error || `HTTP ${response.status}`);
-        }
 
         // Guardar en cache
         _aiAnalysisCache[cacheKey] = data;
