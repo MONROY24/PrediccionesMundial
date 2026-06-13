@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Predictor matemático para el Mundial FIFA 2026. ELO, Poisson, Dixon-Coles y Monte Carlo.">
+    <meta name="description" content="Predictor matemático para el Mundial FIFA 2026. ELO, Poisson, Dixon-Coles y Monte Carlo. Modelo v5.0 con aprendizaje incremental.">
     <title>⚽ Predictor Mundial 2026</title>
     <link rel="icon" type="image/png" href="MR24.png?v=2">
     <link rel="shortcut icon" type="image/png" href="MR24.png?v=2">
@@ -18,19 +18,353 @@
             color: #ffffff;
             padding: 10px;
         }
+
+        /* ── Resultados Reales ── */
+        .results-form-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+        }
+        @media (max-width: 600px) {
+            .results-form-grid { grid-template-columns: 1fr; }
+        }
+        .results-form-grid label {
+            display: block;
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            margin-bottom: 0.4rem;
+        }
+        .results-form-grid input,
+        .results-form-grid select {
+            width: 100%;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-glass);
+            color: #fff;
+            padding: 0.65rem 0.85rem;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            outline: none;
+            transition: border-color 0.2s;
+            box-sizing: border-box;
+        }
+        .results-form-grid input:focus,
+        .results-form-grid select:focus {
+            border-color: var(--accent-primary-light);
+        }
+        .goals-row {
+            grid-column: 1 / -1;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        .goals-row input {
+            width: 80px;
+            text-align: center;
+            font-size: 1.4rem;
+            font-weight: 800;
+            padding: 0.5rem;
+        }
+        .goals-separator {
+            font-size: 1.6rem;
+            font-weight: 900;
+            color: var(--accent-gold);
+        }
+        .results-list-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.85rem 1.1rem;
+            background: var(--bg-primary);
+            border-radius: 10px;
+            border: 1px solid var(--border-glass);
+            margin-bottom: 0.6rem;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+        .results-list-item .r-teams {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-weight: 600;
+            font-size: 0.95rem;
+        }
+        .results-list-item .r-score {
+            font-size: 1.3rem;
+            font-weight: 900;
+            color: var(--accent-gold);
+            min-width: 55px;
+            text-align: center;
+        }
+        .results-list-item .r-meta {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+        .results-list-item .r-elo-badge {
+            font-size: 0.72rem;
+            color: var(--accent-emerald);
+            background: rgba(16,185,129,0.1);
+            border: 1px solid rgba(16,185,129,0.25);
+            border-radius: 6px;
+            padding: 2px 7px;
+        }
+        .btn-delete-result {
+            background: none;
+            border: 1px solid rgba(239,68,68,0.4);
+            color: rgba(239,68,68,0.7);
+            border-radius: 6px;
+            padding: 4px 10px;
+            cursor: pointer;
+            font-size: 0.78rem;
+            transition: all 0.2s;
+        }
+        .btn-delete-result:hover {
+            background: rgba(239,68,68,0.1);
+            color: #ef4444;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 3rem 1rem;
+            color: var(--text-muted);
+        }
+        .empty-state .empty-icon { font-size: 3rem; margin-bottom: 1rem; }
+
+        /* ── Métricas de Desempeño ── */
+        .metric-cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+            gap: 1rem;
+            margin-bottom: 2rem;
+        }
+        .metric-card {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-glass);
+            border-radius: 14px;
+            padding: 1.2rem 1rem;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.2s;
+        }
+        .metric-card:hover { transform: translateY(-2px); }
+        .metric-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0;
+            height: 3px;
+            border-radius: 14px 14px 0 0;
+        }
+        .metric-card.green::before  { background: var(--accent-emerald); }
+        .metric-card.blue::before   { background: var(--accent-primary-light); }
+        .metric-card.gold::before   { background: var(--accent-gold); }
+        .metric-card.purple::before { background: #a78bfa; }
+        .metric-card.red::before    { background: #f87171; }
+        .metric-card .mc-label {
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: var(--text-muted);
+            margin-bottom: 0.6rem;
+            font-weight: 600;
+        }
+        .metric-card .mc-value {
+            font-size: 1.9rem;
+            font-weight: 900;
+            line-height: 1;
+            margin-bottom: 0.25rem;
+        }
+        .metric-card.green  .mc-value { color: var(--accent-emerald); }
+        .metric-card.blue   .mc-value { color: var(--accent-primary-light); }
+        .metric-card.gold   .mc-value { color: var(--accent-gold); }
+        .metric-card.purple .mc-value { color: #a78bfa; }
+        .metric-card.red    .mc-value { color: #f87171; }
+        .metric-card .mc-sub {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+        }
+        .perf-section-title {
+            font-size: 0.85rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-secondary);
+            margin: 1.5rem 0 0.8rem;
+            padding-bottom: 0.4rem;
+            border-bottom: 1px solid var(--border-glass);
+        }
+        .history-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.83rem;
+        }
+        .history-table th {
+            text-align: left;
+            color: var(--text-muted);
+            font-weight: 600;
+            padding: 0.5rem 0.7rem;
+            border-bottom: 1px solid var(--border-glass);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+        }
+        .history-table td {
+            padding: 0.55rem 0.7rem;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            vertical-align: middle;
+        }
+        .history-table tr:hover td {
+            background: rgba(255,255,255,0.02);
+        }
+        .badge-correct   { color: #22c55e; font-weight: 700; }
+        .badge-incorrect { color: #f87171; font-weight: 700; }
+        .badge-exact     { color: #fbbf24; font-weight: 700; }
+        .trend-bar-wrap {
+            height: 6px;
+            background: rgba(255,255,255,0.07);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 0.3rem;
+        }
+        .trend-bar-fill {
+            height: 100%;
+            border-radius: 3px;
+            transition: width 0.5s ease;
+        }
+        .calibration-info-box {
+            background: rgba(99,102,241,0.08);
+            border: 1px solid rgba(99,102,241,0.25);
+            border-radius: 10px;
+            padding: 1rem 1.2rem;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        .cal-item { flex: 1; min-width: 120px; }
+        .cal-item-label { font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.7px; }
+        .cal-item-value { font-size: 1rem; font-weight: 700; color: #a78bfa; margin-top: 0.2rem; }
+        .io-btn-row {
+            display: flex;
+            gap: 0.8rem;
+            flex-wrap: wrap;
+            margin-top: 1rem;
+        }
+        .io-btn {
+            padding: 0.6rem 1.2rem;
+            border-radius: 8px;
+            border: 1px solid var(--border-glass);
+            background: var(--bg-glass);
+            color: var(--text-secondary);
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 600;
+            transition: all 0.2s;
+            font-family: 'Outfit', sans-serif;
+        }
+        .io-btn:hover {
+            border-color: var(--accent-primary-light);
+            color: #fff;
+        }
+        .io-btn.danger:hover {
+            border-color: #ef4444;
+            color: #ef4444;
+        }
+        .save-result-btn {
+            width: 100%;
+            padding: 0.9rem;
+            background: linear-gradient(135deg, var(--accent-emerald), #059669);
+            border: none;
+            border-radius: 10px;
+            color: #fff;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            font-family: 'Outfit', sans-serif;
+            transition: all 0.2s;
+            margin-top: 1rem;
+        }
+        .save-result-btn:hover {
+            opacity: 0.92;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(16,185,129,0.3);
+        }
+        .save-result-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .form-status-msg {
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            margin-top: 0.8rem;
+            font-size: 0.88rem;
+            font-weight: 500;
+            display: none;
+        }
+        .form-status-msg.success {
+            background: rgba(16,185,129,0.1);
+            border: 1px solid rgba(16,185,129,0.3);
+            color: var(--accent-emerald);
+        }
+        .form-status-msg.error {
+            background: rgba(239,68,68,0.1);
+            border: 1px solid rgba(239,68,68,0.3);
+            color: #f87171;
+        }
+
+        /* Mini trend chart */
+        .trend-chart-wrap {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-glass);
+            border-radius: 12px;
+            padding: 1.2rem;
+            margin-bottom: 1rem;
+        }
+        .trend-chart-bars {
+            display: flex;
+            align-items: flex-end;
+            gap: 4px;
+            height: 80px;
+            margin-top: 0.8rem;
+        }
+        .trend-bar-item {
+            flex: 1;
+            border-radius: 3px 3px 0 0;
+            min-width: 8px;
+            transition: height 0.4s ease;
+            cursor: pointer;
+            position: relative;
+        }
+        .trend-bar-item:hover::after {
+            content: attr(data-tip);
+            position: absolute;
+            bottom: 105%;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #1e293b;
+            color: #fff;
+            padding: 3px 7px;
+            border-radius: 4px;
+            font-size: 0.7rem;
+            white-space: nowrap;
+            pointer-events: none;
+            z-index: 10;
+        }
     </style>
 </head>
 <body>
     <button id="globalExportBtn" style="position:fixed; bottom:25px; right:25px; z-index:9999; border-radius:50px; padding:12px 24px; box-shadow:0 10px 25px rgba(0,0,0,0.5); font-weight:bold; background:var(--gradient-hero); color:white; border:none; cursor:pointer; font-family:'Outfit', sans-serif; display:flex; align-items:center; gap:8px; transition:transform 0.2s;">📸 Exportar a PNG</button>
+
     <div class="bg-effects"><div class="bg-orb"></div><div class="bg-orb"></div><div class="bg-orb"></div></div>
     <div class="bg-grid"></div>
 
     <div class="app-container">
         <!-- HERO -->
         <header class="hero">
-            <div class="hero-badge"><span class="pulse-dot"></span> Algoritmo en vivo — Datos 25/26</div>
+            <div class="hero-badge"><span class="pulse-dot"></span> Modelo v5.0 — Aprendizaje Incremental Activo</div>
             <h1>Predictor Mundial 2026</h1>
-            <p>Motor matemático: ELO · Poisson · Dixon-Coles · Monte Carlo · Tanda de Penales</p>
+            <p>Motor matemático: ELO · Poisson · Dixon-Coles · Monte Carlo · Online Learning</p>
             <div class="hero-flags" id="heroFlags" style="display:flex; justify-content:center; gap:15px; margin-top:15px;"></div>
         </header>
 
@@ -40,11 +374,14 @@
             <button class="nav-tab" data-tab="favorites">🏆 Favoritos</button>
             <button class="nav-tab" data-tab="groups">📊 Grupos</button>
             <button class="nav-tab" data-tab="simulation">🎲 Simulación</button>
-
+            <button class="nav-tab" data-tab="results">📝 Resultados</button>
+            <button class="nav-tab" data-tab="performance">📈 Desempeño</button>
             <button class="nav-tab" data-tab="methodology">🧮 Metodología</button>
         </nav>
 
-        <!-- PREDICTOR -->
+        <!-- ══════════════════════════════════════════════════
+             PREDICTOR
+             ══════════════════════════════════════════════════ -->
         <section class="section active" id="section-predictor">
             <h2 class="section-title"><span class="icon">⚡</span> Predicción de Partido</h2>
             <div class="glass-card">
@@ -68,14 +405,14 @@
                 <div style="margin-top: 1.5rem; background: var(--bg-primary); border: 1px solid var(--border-glass); border-radius: 8px; padding: 1.2rem; box-shadow: inset 0 2px 5px rgba(0,0,0,0.2);">
                     <label style="display:block; color:var(--text-secondary); margin-bottom:0.5rem; font-size:0.85rem; font-weight:bold; text-transform:uppercase; letter-spacing:1px;">Lente Predictivo (Modelo Matemático)</label>
                     <select id="singleMatchModel" style="width:100%; background:var(--bg-glass); border:1px solid var(--accent-gold); color:white; padding:10px; border-radius:6px; font-weight:bold; outline:none; cursor:pointer;">
-                        <option value="standard" selected>🌟 Poisson Dixon-Coles (Equilibrado)</option>
+                        <option value="standard" selected>🌟 Poisson Dixon-Coles v5.0 (Equilibrado)</option>
                         <option value="pure_elo">🧮 Pure ELO (Ranking Histórico)</option>
                         <option value="momentum">🔥 Hot-Hand (Momento de Forma)</option>
                         <option value="economic">💰 Economic Power (Valor de Plantilla)</option>
                         <option value="defensive">🛡️ Defensive Matrix (Táctico Defensivo)</option>
                     </select>
                     <div id="singleMatchModelDesc" style="margin-top: 0.8rem; font-size: 0.85rem; color: var(--text-muted); line-height: 1.4; border-left: 3px solid var(--accent-gold); padding-left: 10px; font-style:italic;">
-                        El estándar de la industria. Combina historia (ELO), calidad de jugadores y rachas recientes. Es el modelo más realista y equilibrado.
+                        v5.0 calibrado: λ exponencial + ELO histórico ponderado (65%). Garantiza coherencia entre probabilidad de victoria y marcador predicho.
                     </div>
                 </div>
                 <div style="display:flex;gap:1rem;margin-top:1.5rem">
@@ -94,34 +431,39 @@
             </div>
         </section>
 
-        <!-- FAVORITOS -->
+        <!-- ══════════════════════════════════════════════════
+             FAVORITOS
+             ══════════════════════════════════════════════════ -->
         <section class="section" id="section-favorites">
             <h2 class="section-title"><span class="icon">🏆</span> Ranking de Favoritos</h2>
             <p style="color:var(--text-muted);font-size:0.8rem;margin-bottom:1rem">Haz clic en cualquier selección para llevarla al predictor</p>
             <div class="favorites-grid" id="favoritesGrid"></div>
         </section>
 
-        <!-- GRUPOS -->
+        <!-- ══════════════════════════════════════════════════
+             GRUPOS
+             ══════════════════════════════════════════════════ -->
         <section class="section" id="section-groups">
             <h2 class="section-title"><span class="icon">📊</span> Fase de Grupos — Predicción</h2>
             <div class="groups-grid" id="groupsGrid"></div>
         </section>
 
-        <!-- SIMULACIÓN -->
+        <!-- ══════════════════════════════════════════════════
+             SIMULACIÓN
+             ══════════════════════════════════════════════════ -->
         <section class="section" id="section-simulation">
             <h2 class="section-title" style="text-align:center;"><span class="icon">🎲</span> Simulación Monte Carlo</h2>
             <p style="text-align:center; color:var(--text-secondary); font-size:0.9rem; margin-bottom:2rem; max-width:600px; margin-left:auto; margin-right:auto;">
-                Simula el torneo completo miles de veces de forma paralela para estimar la probabilidad matemática de que cada selección llegue a fases finales.
+                Simula el torneo completo miles de veces para estimar la probabilidad de que cada selección llegue a cada fase.
             </p>
-            
             <div class="simulation-controls" style="display:flex; flex-direction:column; align-items:center; gap:20px; background:var(--bg-glass); padding:30px; border-radius:16px; margin-bottom: 2rem; box-shadow:var(--shadow-md);">
                 <div style="width:100%; max-width:400px; display:flex; flex-direction:column; gap:15px;">
                     <select id="simModel" style="width:100%; background:var(--bg-primary); border:1px solid var(--border-glass); color:white; padding:12px; border-radius:8px;">
-                        <option value="standard" selected>🌟 Poisson Dixon-Coles (Estándar de la Industria)</option>
+                        <option value="standard" selected>🌟 Poisson Dixon-Coles v5.0 (Estándar)</option>
                         <option value="pure_elo">🧮 Pure ELO (Matemático Estricto)</option>
                         <option value="momentum">🔥 Hot-Hand Momentum (Enfoque de Rachas)</option>
                         <option value="economic">💰 Economic Power (Fuerza de Plantilla)</option>
-                        <option value="defensive">🛡️ Defensive Matrix (Enfoque Defensivo / Underdog)</option>
+                        <option value="defensive">🛡️ Defensive Matrix (Enfoque Defensivo)</option>
                     </select>
                     <select id="simIterations" style="width:100%; background:var(--bg-primary); border:1px solid var(--border-glass); color:white; padding:12px; border-radius:8px;">
                         <option value="500">500 simulaciones (Demostración)</option>
@@ -163,59 +505,186 @@
             </div>
         </section>
 
+        <!-- ══════════════════════════════════════════════════
+             RESULTADOS REALES (NUEVO)
+             ══════════════════════════════════════════════════ -->
+        <section class="section" id="section-results">
+            <h2 class="section-title"><span class="icon">📝</span> Resultados Reales</h2>
 
-        <!-- METODOLOGÍA -->
+            <!-- Formulario de ingreso -->
+            <div class="glass-card" style="margin-bottom:2rem;">
+                <h3 style="margin-bottom:1.2rem;color:var(--accent-primary-light);">➕ Registrar Resultado</h3>
+                <div class="results-form-grid" id="resultsForm">
+                    <div>
+                        <label>Equipo A (Local)</label>
+                        <select id="resultTeamA">
+                            <option value="">Seleccionar equipo...</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label>Equipo B (Visitante)</label>
+                        <select id="resultTeamB">
+                            <option value="">Seleccionar equipo...</option>
+                        </select>
+                    </div>
+                    <div class="goals-row">
+                        <div style="flex:1">
+                            <label>Goles A</label>
+                            <input type="number" id="resultGoalsA" min="0" max="20" value="0" style="width:80px">
+                        </div>
+                        <span class="goals-separator">—</span>
+                        <div style="flex:1">
+                            <label>Goles B</label>
+                            <input type="number" id="resultGoalsB" min="0" max="20" value="0" style="width:80px">
+                        </div>
+                    </div>
+                    <div>
+                        <label>Fecha</label>
+                        <input type="date" id="resultDate">
+                    </div>
+                    <div>
+                        <label>Fase</label>
+                        <select id="resultStage">
+                            <option value="Fase de Grupos">Fase de Grupos</option>
+                            <option value="Ronda de 32">Ronda de 32</option>
+                            <option value="Octavos de Final">Octavos de Final</option>
+                            <option value="Cuartos de Final">Cuartos de Final</option>
+                            <option value="Semifinal">Semifinal</option>
+                            <option value="Final">Final</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div id="resultFormStatus" class="form-status-msg"></div>
+                <button class="save-result-btn" id="saveResultBtn">
+                    ✅ Guardar Resultado y Recalibrar Modelo
+                </button>
+            </div>
+
+            <!-- Lista de resultados guardados -->
+            <div class="glass-card">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:1.2rem;flex-wrap:wrap;gap:0.8rem;">
+                    <h3 style="margin:0;color:var(--accent-primary-light);">📋 Resultados Registrados (<span id="resultsCount">0</span>)</h3>
+                    <div class="io-btn-row" style="margin:0;">
+                        <button class="io-btn" id="exportResultsBtn">⬇️ Exportar JSON</button>
+                        <label class="io-btn" style="cursor:pointer;" title="Importar archivo JSON">
+                            ⬆️ Importar JSON
+                            <input type="file" id="importResultsFile" accept=".json" style="display:none;">
+                        </label>
+                        <button class="io-btn danger" id="clearResultsBtn">🗑️ Limpiar Todo</button>
+                    </div>
+                </div>
+                <div id="resultsList">
+                    <div class="empty-state">
+                        <div class="empty-icon">📭</div>
+                        <p>No hay resultados registrados todavía.</p>
+                        <p style="font-size:0.82rem;">Registra el primer partido para comenzar el aprendizaje incremental.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════
+             DESEMPEÑO DEL MODELO (NUEVO)
+             ══════════════════════════════════════════════════ -->
+        <section class="section" id="section-performance">
+            <h2 class="section-title"><span class="icon">📈</span> Desempeño del Modelo</h2>
+
+            <!-- Tarjetas de métricas principales -->
+            <div id="performanceMetrics">
+                <div class="empty-state glass-card">
+                    <div class="empty-icon">📊</div>
+                    <p>Aquí aparecerán las métricas del modelo.</p>
+                    <p style="font-size:0.82rem;">Para calcular métricas necesitas: <br>
+                    1. Ejecutar una predicción (tab ⚡ Predictor)<br>
+                    2. Registrar el resultado real (tab 📝 Resultados)</p>
+                </div>
+            </div>
+
+            <!-- Estado de calibración -->
+            <div class="glass-card" style="margin-top:2rem;" id="calibrationCard">
+                <h3 style="color:var(--accent-primary-light);margin-bottom:0.8rem;">⚙️ Estado de Calibración del Motor</h3>
+                <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:1rem;">
+                    Parámetros actuales del motor tras el aprendizaje incremental. Se actualizan cada vez que se registra un resultado real.
+                </p>
+                <div id="calibrationDetails">
+                    <div class="calibration-info-box">
+                        <div class="cal-item">
+                            <div class="cal-item-label">Partidos Procesados</div>
+                            <div class="cal-item-value" id="calMatchesProcessed">0</div>
+                        </div>
+                        <div class="cal-item">
+                            <div class="cal-item-label">Corrección de Sesgo λ</div>
+                            <div class="cal-item-value" id="calBiasCorrection">0.00%</div>
+                        </div>
+                        <div class="cal-item">
+                            <div class="cal-item-label">ρ Dinámico (Dixon-Coles)</div>
+                            <div class="cal-item-value" id="calRhoDynamic">-0.0800</div>
+                        </div>
+                        <div class="cal-item">
+                            <div class="cal-item-label">Última Actualización</div>
+                            <div class="cal-item-value" id="calLastUpdate" style="font-size:0.75rem;">—</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Historial de partidos evaluados -->
+            <div class="glass-card" style="margin-top:2rem;" id="historyCard">
+                <h3 style="color:var(--accent-primary-light);margin-bottom:0.8rem;">📜 Historial de Predicciones</h3>
+                <div id="historyTableContainer">
+                    <p style="color:var(--text-muted);font-size:0.85rem;">Registra predicciones y resultados para ver el historial de aciertos.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════
+             METODOLOGÍA
+             ══════════════════════════════════════════════════ -->
         <section class="section" id="section-methodology">
-            <h2 class="section-title"><span class="icon">🧮</span> Metodología del Modelo Predictivo</h2>
-            
-            <div class="glass-card" style="margin-bottom:2rem; padding:30px; font-size:0.95rem; line-height:1.7; color:var(--text-primary);">
-                <p style="margin-bottom:1.5rem;">El <strong>Predictor Mundial 2026</strong> utiliza un modelo estocástico avanzado basado en métricas reales de rendimiento deportivo. La arquitectura matemática se compone de cuatro pilares fundamentales diseñados para simular distribuciones de probabilidad realistas en torneos internacionales.</p>
-                
-                <h3 style="color:var(--accent-primary-light); margin-top:2rem; margin-bottom:1rem; font-size:1.1rem; border-bottom:1px solid var(--border-glass); padding-bottom:5px;">1. Sistema ELO Ponderado</h3>
-                <p style="margin-bottom:1.5rem;">La fuerza base de cada selección se determina mediante un sistema ELO adaptativo. A diferencia de rankings estáticos, el ELO se recalcula considerando el <strong>estado de forma reciente</strong> (últimos partidos), el <strong>valor de la plantilla</strong> en el mercado y métricas de ataque/defensa. Los países anfitriones (Estados Unidos, México y Canadá) reciben un bonificador estadístico por localía (+30 puntos ELO) para reflejar su ventaja de local comprobada empíricamente.</p>
+            <h2 class="section-title"><span class="icon">🧮</span> Metodología del Modelo Predictivo v5.0</h2>
 
-                <h3 style="color:var(--accent-primary-light); margin-top:2rem; margin-bottom:1rem; font-size:1.1rem; border-bottom:1px solid var(--border-glass); padding-bottom:5px;">2. Generación de Goles Esperados (λ)</h3>
-                <p style="margin-bottom:1.5rem;">Utilizando la diferencia de fuerza ELO entre dos equipos, el modelo calcula la probabilidad de victoria y extrae el <strong>parámetro Lambda (λ)</strong>, que representa los goles esperados para cada equipo en un periodo de 90 minutos. Estos lambdas son calibrados mediante coeficientes defensivos y ofensivos históricos de cada selección.</p>
+            <div class="glass-card" style="margin-bottom:2rem; padding:30px; font-size:0.95rem; line-height:1.7; color:var(--text-primary);">
+                <p style="margin-bottom:1.5rem;">El <strong>Predictor Mundial 2026 v5.0</strong> utiliza un modelo estocástico avanzado recalibrado con datos históricos de Mundiales 2010–2022. La arquitectura incorpora <strong>aprendizaje incremental</strong> que ajusta los parámetros conforme avanzan los partidos reales del torneo.</p>
+
+                <h3 style="color:var(--accent-primary-light); margin-top:2rem; margin-bottom:1rem; font-size:1.1rem; border-bottom:1px solid var(--border-glass); padding-bottom:5px;">1. Sistema ELO Compuesto Recalibrado (v5.0)</h3>
+                <p style="margin-bottom:1.5rem;">La fuerza base se calcula con <strong>65% de peso en el ELO histórico FIFA</strong> y 35% en el ELO de plantilla (valor de mercado). Esto reduce el sesgo anterior que sobrevaloraba a equipos europeos ricos sobre equipos históricos consolidados. Los anfitriones (EUA, México, Canadá) reciben +30 puntos ELO por localía.</p>
+
+                <h3 style="color:var(--accent-primary-light); margin-top:2rem; margin-bottom:1rem; font-size:1.1rem; border-bottom:1px solid var(--border-glass); padding-bottom:5px;">2. Escala Exponencial de Goles Esperados (λ) — Corrección crítica v5.0</h3>
+                <p style="margin-bottom:1rem;">La versión anterior usaba una función de potencia (exponente 1.1) que producía una separación insuficiente entre favoritos y underdogs, causando la contradicción donde un equipo con 75% de probabilidad de victoria tenía al 1-1 como marcador más probable.</p>
+                <p style="margin-bottom:1.5rem;">La versión 5.0 usa una <strong>función exponencial calibrada</strong>: <code style="background:rgba(99,102,241,0.15);padding:2px 6px;border-radius:4px;">λ = 1.35 × exp(1.8 × (pVictoria − 0.5))</code>. Esto garantiza que para pVictoria=75%, λA=2.15 y λB=0.84, haciendo que los marcadores 1-0 y 2-0 siempre sean más probables que el 1-1.</p>
 
                 <h3 style="color:var(--accent-primary-light); margin-top:2rem; margin-bottom:1rem; font-size:1.1rem; border-bottom:1px solid var(--border-glass); padding-bottom:5px;">3. Distribución Bivariada de Poisson con Corrección Dixon-Coles</h3>
-                <p style="margin-bottom:1.5rem;">Sabiendo el valor λ de ambos equipos, se simula la matriz de posibles marcadores (desde 0-0 hasta 8-8) utilizando una distribución de probabilidad de Poisson. Posteriormente, se aplica la corrección matemática de <strong>Dixon-Coles (1997)</strong>, la cual ajusta empíricamente la frecuencia de marcadores de baja puntuación (como el 0-0, 1-0 o 1-1) para evitar la subestimación natural del modelo de Poisson en los empates del fútbol profesional.</p>
+                <p style="margin-bottom:1.5rem;">Sobre los lambdas correctamente calibrados, se aplica la corrección <strong>Dixon-Coles (1997)</strong> con ρ dinámico. A diferencia de la creencia inicial, el signo negativo de ρ es correcto para el fútbol moderno: aumenta levemente la probabilidad de resultados bajos (0-0, 1-1) que tienden a estar subestimados por Poisson puro. El valor ρ se ajusta dinámicamente conforme se observan más empates reales.</p>
 
-                <h3 style="color:var(--accent-primary-light); margin-top:2rem; margin-bottom:1rem; font-size:1.1rem; border-bottom:1px solid var(--border-glass); padding-bottom:5px;">4. Simulación Estocástica de Monte Carlo</h3>
-                <p style="margin-bottom:1.5rem;">Para el torneo completo, el motor ejecuta hasta <strong>1,000,000 iteraciones</strong> del Mundial entero utilizando el algoritmo anterior. En fases de eliminación directa, si la distribución predice un empate, se dispara el motor secundario de <strong>Tandas de Penales</strong>, el cual toma en cuenta un "Penalty Rating" interno de los cobradores de élite bajo estrés. Al finalizar las simulaciones, la convergencia estadística (Ley de los Grandes Números) revela las probabilidades precisas de cada selección de avanzar de ronda.</p>
+                <h3 style="color:var(--accent-primary-light); margin-top:2rem; margin-bottom:1rem; font-size:1.1rem; border-bottom:1px solid var(--border-glass); padding-bottom:5px;">4. Aprendizaje Incremental (Online Learning)</h3>
+                <p style="margin-bottom:1.5rem;">Cada resultado real ingresado en la tab "📝 Resultados" activa tres mecanismos de recalibración: (1) <strong>Actualización ELO</strong> con K-factor adaptativo que disminuye conforme más partidos se procesan; (2) <strong>Corrección de sesgo λ</strong> mediante media móvil exponencial que ajusta si el modelo predice sistemáticamente más o menos goles que los reales; (3) <strong>Ajuste dinámico de ρ</strong> basado en la frecuencia observada de empates.</p>
 
-                <h3 style="color:var(--accent-primary-light); margin-top:2rem; margin-bottom:1rem; font-size:1.1rem; border-bottom:1px solid var(--border-glass); padding-bottom:5px;">5. Lentes Predictivos Multi-Modelo</h3>
-                <p style="margin-bottom:1.5rem;">La arquitectura permite filtrar la simulación a través de cinco enfoques estocásticos distintos:
-                <ul style="margin-left: 20px; margin-bottom: 1.5rem; line-height: 1.7; color: var(--text-secondary);">
-                    <li><strong style="color:white;">🌟 Estándar (Dixon-Coles):</strong> Modelo balanceado (ELO + Mercado + Rachas).</li>
-                    <li><strong style="color:white;">🧮 Pure ELO:</strong> Algoritmo estricto basado en jerarquía histórica pura.</li>
-                    <li><strong style="color:white;">🔥 Hot-Hand Momentum:</strong> Exagera la racha invicta para simular "Caballos Negros".</li>
-                    <li><strong style="color:white;">💰 Economic Power:</strong> Probabilidades dictadas estrictamente por el valor en euros (€) de la plantilla.</li>
-                    <li><strong style="color:white;">🛡️ Defensive Matrix:</strong> Suprime la tasa global de goleo y bonifica los esquemas tácticos defensivos.</li>
-                </ul>
-                </p>
+                <h3 style="color:var(--accent-primary-light); margin-top:2rem; margin-bottom:1rem; font-size:1.1rem; border-bottom:1px solid var(--border-glass); padding-bottom:5px;">5. Evaluación de Desempeño</h3>
+                <p style="margin-bottom:1.5rem;">La tab "📈 Desempeño" calcula métricas estándar de la industria: <strong>Log Loss</strong> (penaliza confianza errónea), <strong>Brier Score</strong> (error cuadrático probabilístico), <strong>MAE/RMSE de goles</strong> (error en predicción de goles), y <strong>Calibration Error</strong> (¿las probabilidades del 70% se cumplen 70% de las veces?). El límite teórico de precisión para fútbol es ~70% ganador y ~35-40% marcador exacto, incluso con los mejores modelos del mundo.</p>
+
+                <h3 style="color:var(--accent-primary-light); margin-top:2rem; margin-bottom:1rem; font-size:1.1rem; border-bottom:1px solid var(--border-glass); padding-bottom:5px;">6. Simulación Monte Carlo</h3>
+                <p style="margin-bottom:1.5rem;">Para el torneo completo, el motor ejecuta hasta <strong>1,000,000 iteraciones</strong> en un Web Worker paralelo. En fases de eliminación directa, si hay empate se activa el motor secundario de <strong>Tandas de Penales</strong> basado en los Penalty Ratings individuales de los jugadores convocados.</p>
             </div>
         </section>
 
         <footer class="app-footer" style="display:flex; flex-direction:row; justify-content:space-between; align-items:center; padding: 40px 30px; margin-top: 50px; border-top: 1px solid var(--border-glass); background:var(--bg-glass); border-radius:16px; box-shadow:var(--shadow-md); flex-wrap: wrap;">
             <div style="flex: 1; text-align: left; min-width: 250px;">
                 <p style="font-size: 1.15rem; color: var(--text-primary); margin:0; font-weight: 600;">Desarrollado por <strong style="color:var(--accent-primary-light);">MR24</strong></p>
-                <p style="font-size: 0.9rem; color: var(--text-muted); margin:0; margin-top:5px;">© 2026 Predictor Mundial</p>
+                <p style="font-size: 0.9rem; color: var(--text-muted); margin:0; margin-top:5px;">© 2026 Predictor Mundial — Motor v5.0</p>
             </div>
-            
             <div style="flex: 1; display:flex; justify-content:center; min-width: 150px; margin: 15px 0;">
                 <img src="MR24.png" alt="MR24 Logo" onerror="this.style.display='none'" style="width: 110px; height: 110px; border-radius: 20px; object-fit:cover; filter: drop-shadow(0 6px 15px rgba(0,0,0,0.8)); border: 3px solid var(--border-glass); transition: transform 0.3s ease;">
             </div>
-            
             <div style="flex: 1; text-align: right; min-width: 250px; font-size: 0.9rem; color: var(--text-muted); font-family: 'Outfit', sans-serif; opacity: 0.8;">
-                <span style="font-weight:bold; color:var(--text-secondary);">Motor Matemático</span><br>
-                ELO · Poisson · Monte Carlo
+                <span style="font-weight:bold; color:var(--text-secondary);">Motor Matemático v5.0</span><br>
+                ELO · Poisson Exponencial · Dixon-Coles · Monte Carlo · Online Learning
             </div>
         </footer>
     </div>
 
-
     <script src="engine.js"></script>
+    <script src="results.js"></script>
     <script src="app.js"></script>
-
 </body>
 </html>

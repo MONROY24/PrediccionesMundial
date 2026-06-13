@@ -1,7 +1,11 @@
 // ============================================================
-// APP.JS - CONTROLADOR PRINCIPAL v4.0 (Mundial 2026)
+// APP.JS - CONTROLADOR PRINCIPAL v5.0 (Mundial 2026)
+// Integra: PredictionEngine v5.0 + ResultsManager
 // ============================================================
 
+// ============================================================
+// FLAG HELPER
+// ============================================================
 function getFlagHtml(emoji, className = 'team-flag-img') {
     if (!emoji) return '🏳️';
     let code = '';
@@ -21,23 +25,26 @@ function getFlagHtml(emoji, className = 'team-flag-img') {
     return emoji;
 }
 
+// ============================================================
+// GLOBALS
+// ============================================================
 let WORLD_CUP_DATA = null;
 let engine = null;
+let resultsManager = null;
 
 // ============================================================
-// INICIALIZACIÓN (Asíncrona)
+// INICIALIZACIÓN
 // ============================================================
 document.addEventListener('DOMContentLoaded', async () => {
     try {
         const response = await fetch('data.json');
         WORLD_CUP_DATA = await response.json();
 
-        // Inicializar banderas HTML
         Object.keys(WORLD_CUP_DATA.teams).forEach(team => {
             WORLD_CUP_DATA.teams[team].flagHtml = getFlagHtml(WORLD_CUP_DATA.teams[team].flag);
         });
 
-        // Poblar Banderas del Hero (Anfitriones)
+        // Banderas del Hero
         const heroFlagsEl = document.getElementById('heroFlags');
         if (heroFlagsEl) {
             const hosts = ['Estados Unidos', 'México', 'Canadá'];
@@ -47,24 +54,43 @@ document.addEventListener('DOMContentLoaded', async () => {
             }).join('');
         }
 
+        // Inicializar motor
         engine = new PredictionEngine(WORLD_CUP_DATA);
+
+        // Inicializar ResultsManager y restaurar calibración
+        resultsManager = new ResultsManager();
+        if (resultsManager.getResultCount() > 0) {
+            const restored = resultsManager.restoreEngineCalibration(engine);
+            if (restored) {
+                console.log(`[App] Calibración restaurada: ${resultsManager.getResultCount()} partidos previos`);
+            }
+        }
 
         initTabs();
         populateTeamSelectors();
-        
-        // Procesar URL Compartida
         handleUrlParams();
 
         renderFavorites();
         renderGroups();
         setupTeamSelectorListeners();
         setupButtons();
+
+        // Módulos nuevos
+        populateResultsSelectors();
+        setupResultsTab();
+        renderResultsList();
+        renderPerformance();
+        updateCalibrationDisplay();
+
     } catch (error) {
-        console.error("Error cargando los datos:", error);
+        console.error('Error cargando los datos:', error);
         document.body.innerHTML = `<h2 style="color:white;text-align:center;margin-top:50px">⚠️ Error crítico cargando data.json. Asegúrate de estar ejecutando la web a través de un servidor (ej. Live Server o Vercel).</h2>`;
     }
 });
 
+// ============================================================
+// URL PARAMS
+// ============================================================
 function handleUrlParams() {
     const params = new URLSearchParams(window.location.search);
     const teamA = params.get('a');
@@ -74,42 +100,42 @@ function handleUrlParams() {
         document.getElementById('teamB-select').value = teamB;
         updateTeamDisplay('A');
         updateTeamDisplay('B');
-        setTimeout(() => runPrediction(), 400); // Auto-ejecutar
+        setTimeout(() => runPrediction(), 400);
     }
 }
 
+// ============================================================
+// BOTONES
+// ============================================================
 function setupButtons() {
     document.getElementById('predictBtn')?.addEventListener('click', runPrediction);
     document.getElementById('simulateBtn')?.addEventListener('click', runSimulation);
-    
-    // Configurar el selector de modelo para predicciones individuales
+
+    // Selector de modelo
     const singleModelSelect = document.getElementById('singleMatchModel');
     if (singleModelSelect) {
         singleModelSelect.addEventListener('change', () => {
             const descEl = document.getElementById('singleMatchModelDesc');
             const val = singleModelSelect.value;
-            if (val === 'standard') {
-                descEl.innerHTML = "El estándar de la industria. Combina historia (ELO), calidad de jugadores y rachas recientes. Es el modelo más realista y equilibrado.";
-            } else if (val === 'pure_elo') {
-                descEl.innerHTML = "Apaga las rachas y el dinero. 100% matemático y frío, basado estrictamente en el Ranking ELO histórico. Ideal para la teoría ajedrecística pura.";
-            } else if (val === 'momentum') {
-                descEl.innerHTML = "Premia la racha victoriosa (los últimos 10 partidos) con un impulso exponencial. Perfecto para detectar 'Caballos Negros' imparables.";
-            } else if (val === 'economic') {
-                descEl.innerHTML = "Ignora la historia y la táctica. Asume que la calidad individual europea (el valor de mercado de la plantilla en €) aplastará la táctica rival.";
-            } else if (val === 'defensive') {
-                descEl.innerHTML = "El enfoque de los Mundiales cerrados: disminuye las probabilidades de goleo y premia abrumadoramente a los equipos que casi no reciben goles.";
-            }
-            
-            // Si ya hay un partido en pantalla, recalculamos automáticamente
+            const descs = {
+                standard:  'v5.0 calibrado: λ exponencial + ELO histórico ponderado (65%). Garantiza coherencia entre probabilidad de victoria y marcador predicho.',
+                pure_elo:  'Apaga las rachas y el dinero. 100% matemático y frío, basado estrictamente en el Ranking ELO histórico. Ideal para la teoría pura.',
+                momentum:  'Premia la racha victoriosa con impulso exponencial. Perfecto para detectar "Caballos Negros" en plena racha.',
+                economic:  'Ignora historia y táctica. Asume que la calidad de plantilla (valor de mercado en €) aplasta la táctica rival.',
+                defensive: 'El enfoque de los Mundiales cerrados: disminuye las probabilidades de goleo y premia los esquemas defensivos.'
+            };
+            if (descEl) descEl.innerHTML = descs[val] || '';
             if (document.getElementById('predictionResults')?.classList.contains('visible')) {
                 runPrediction();
             }
         });
     }
+
+    // Share
     document.getElementById('shareBtn')?.addEventListener('click', () => {
         const tA = document.getElementById('teamA-select').value;
         const tB = document.getElementById('teamB-select').value;
-        if (!tA || !tB) return alert("Selecciona dos equipos primero.");
+        if (!tA || !tB) return alert('Selecciona dos equipos primero.');
         const url = new URL(window.location.href);
         url.searchParams.set('a', tA);
         url.searchParams.set('b', tB);
@@ -120,21 +146,15 @@ function setupButtons() {
         });
     });
 
+    // Export prediction
     document.getElementById('exportBtn')?.addEventListener('click', async () => {
         const resultsEl = document.getElementById('predictionResults');
-        if (!resultsEl.classList.contains('visible')) return alert("Ejecuta una predicción primero.");
-        
+        if (!resultsEl.classList.contains('visible')) return alert('Ejecuta una predicción primero.');
         const btn = document.getElementById('exportBtn');
         const orig = btn.innerHTML;
         btn.innerHTML = '⏳';
-        
         try {
-            const canvas = await html2canvas(resultsEl, {
-                backgroundColor: '#0f0f1a', // Color alineado con el UI
-                scale: 2, // Alta resolución
-                logging: false,
-                useCORS: true
-            });
+            const canvas = await html2canvas(resultsEl, { backgroundColor: '#0f0f1a', scale: 2, logging: false, useCORS: true });
             const link = document.createElement('a');
             const tA = document.getElementById('teamA-select').value;
             const tB = document.getElementById('teamB-select').value;
@@ -144,26 +164,20 @@ function setupButtons() {
             btn.innerHTML = '✅';
         } catch (err) {
             console.error(err);
-            alert("Error al exportar la imagen.");
+            alert('Error al exportar la imagen.');
             btn.innerHTML = '❌';
         }
-        
         setTimeout(() => btn.innerHTML = orig, 2000);
     });
 
+    // Export global
     document.getElementById('globalExportBtn')?.addEventListener('click', async () => {
         const appContainer = document.querySelector('.app-container');
         const btn = document.getElementById('globalExportBtn');
         const orig = btn.innerHTML;
         btn.innerHTML = '⏳ Exportando...';
-        
         try {
-            const canvas = await html2canvas(appContainer, {
-                backgroundColor: '#0a0e1a', // Mismo color de fondo
-                scale: 2,
-                logging: false,
-                useCORS: true
-            });
+            const canvas = await html2canvas(appContainer, { backgroundColor: '#0a0e1a', scale: 2, logging: false, useCORS: true });
             const link = document.createElement('a');
             link.download = `Predictor_Mundial_MR24_${Date.now()}.png`;
             link.href = canvas.toDataURL('image/png');
@@ -171,10 +185,9 @@ function setupButtons() {
             btn.innerHTML = '✅ Exportado';
         } catch (err) {
             console.error(err);
-            alert("Error al exportar la imagen de la pantalla completa.");
+            alert('Error al exportar.');
             btn.innerHTML = '❌ Error';
         }
-        
         setTimeout(() => btn.innerHTML = orig, 3000);
     });
 }
@@ -190,12 +203,18 @@ function initTabs() {
             tab.classList.add('active');
             const section = document.getElementById(`section-${tab.dataset.tab}`);
             if (section) section.classList.add('active');
+
+            // Actualizar métricas al entrar al tab de desempeño
+            if (tab.dataset.tab === 'performance') {
+                renderPerformance();
+                updateCalibrationDisplay();
+            }
         });
     });
 }
 
 // ============================================================
-// SELECTORES DE EQUIPOS (organizados por grupo)
+// SELECTORES DE EQUIPOS
 // ============================================================
 function populateTeamSelectors() {
     const selectA = document.getElementById('teamA-select');
@@ -214,17 +233,14 @@ function populateTeamSelectors() {
 
         teams.forEach(team => {
             const flag = WORLD_CUP_DATA.teams[team]?.flag || '🏳️';
-            const optA = new Option(`${flag} ${team}`, team);
-            const optB = new Option(`${flag} ${team}`, team);
-            ogA.appendChild(optA);
-            ogB.appendChild(optB);
+            ogA.appendChild(new Option(`${flag} ${team}`, team));
+            ogB.appendChild(new Option(`${flag} ${team}`, team));
         });
         selectA.appendChild(ogA);
         selectB.appendChild(ogB);
     });
 
-    // Preseleccionar partido interesante
-    const firstTeam = Object.values(WORLD_CUP_DATA.groups.J || {})[0] || 'Argentina';
+    const firstTeam  = Object.values(WORLD_CUP_DATA.groups.J || {})[0] || 'Argentina';
     const secondTeam = Object.values(WORLD_CUP_DATA.groups.I || {})[0] || 'Francia';
     selectA.value = firstTeam;
     selectB.value = secondTeam;
@@ -234,23 +250,22 @@ function populateTeamSelectors() {
             create: false,
             plugins: ['dropdown_input'],
             render: {
-                option: function(data, escape) {
+                option: (data, escape) => {
                     const team = WORLD_CUP_DATA.teams[data.value];
                     const flagHtml = team ? team.flagHtml : '🏳️';
-                    const textName = escape(data.text).replace(/^(?:[\u2700-\u27bf]|(?:\ud83c[\udde6-\uddff]){2}|[\ud800-\udbff][\udc00-\udfff]|[\u0023-\u0039]\ufe0f?\u20e3|\u3299|\u3297|\u303d|\u3030|\u24c2|\ud83c[\udd70-\udd71]|\ud83c[\udd7e-\udd7f]|\ud83c\udd8e|\ud83c[\udd91-\udd9a]|\ud83c[\udde6-\uddff]|\ud83c[\ude01-\ude02]|\ud83c\ude1a|\ud83c\ude2f|\ud83c[\ude32-\ude3a]|\ud83c[\ude50-\ude51]|\u203c|\u2049|[\u25aa-\u25ab]|\u25b6|\u25c0|[\u25fb-\u25fe]|\u00a9|\u00ae|\u2122|\u2139|\ud83c\udc04|[\u2600-\u26FF]|\u2b05|\u2b06|\u2b07|\u2b1b|\u2b1c|\u2b50|\u2b55|\u231a|\u231b|\u2328|\u23cf|[\u23e9-\u23f3]|[\u23f8-\u23fa]|\ud83c\udccf|\u2934|\u2935|[\u2190-\u21ff])\s*/g, '');
+                    const textName = escape(data.text).replace(emojiRegex, '').trim();
                     return `<div><span style="display:inline-block;width:20px;text-align:center;margin-right:8px;vertical-align:middle;">${flagHtml}</span><span style="vertical-align:middle;">${textName}</span></div>`;
                 },
-                item: function(data, escape) {
+                item: (data, escape) => {
                     const team = WORLD_CUP_DATA.teams[data.value];
                     const flagHtml = team ? team.flagHtml : '🏳️';
-                    const textName = escape(data.text).replace(/^(?:[\u2700-\u27bf]|(?:\ud83c[\udde6-\uddff]){2}|[\ud800-\udbff][\udc00-\udfff]|[\u0023-\u0039]\ufe0f?\u20e3|\u3299|\u3297|\u303d|\u3030|\u24c2|\ud83c[\udd70-\udd71]|\ud83c[\udd7e-\udd7f]|\ud83c\udd8e|\ud83c[\udd91-\udd9a]|\ud83c[\udde6-\uddff]|\ud83c[\ude01-\ude02]|\ud83c\ude1a|\ud83c\ude2f|\ud83c[\ude32-\ude3a]|\ud83c[\ude50-\ude51]|\u203c|\u2049|[\u25aa-\u25ab]|\u25b6|\u25c0|[\u25fb-\u25fe]|\u00a9|\u00ae|\u2122|\u2139|\ud83c\udc04|[\u2600-\u26FF]|\u2b05|\u2b06|\u2b07|\u2b1b|\u2b1c|\u2b50|\u2b55|\u231a|\u231b|\u2328|\u23cf|[\u23e9-\u23f3]|[\u23f8-\u23fa]|\ud83c\udccf|\u2934|\u2935|[\u2190-\u21ff])\s*/g, '');
+                    const textName = escape(data.text).replace(emojiRegex, '').trim();
                     return `<div><span style="display:inline-block;width:20px;text-align:center;margin-right:8px;vertical-align:middle;">${flagHtml}</span><span style="vertical-align:middle;">${textName}</span></div>`;
                 }
             }
         };
         new TomSelect(selectA, tsConfig);
         new TomSelect(selectB, tsConfig);
-        
         const simIters = document.getElementById('simIterations');
         if (simIters) new TomSelect(simIters, { create: false, controlInput: null });
     }
@@ -259,15 +274,18 @@ function populateTeamSelectors() {
     updateTeamDisplay('B');
 }
 
+// Regex para strips de emojis en TomSelect
+const emojiRegex = /^(?:[\u2700-\u27bf]|(?:\ud83c[\udde6-\uddff]){2}|[\ud800-\udbff][\udc00-\udfff]|[\u0023-\u0039]\ufe0f?\u20e3|\u3299|\u3297|\u303d|\u3030|\u24c2|\ud83c[\udd70-\udd71]|\ud83c[\udd7e-\udd7f]|\ud83c\udd8e|\ud83c[\udd91-\udd9a]|\ud83c[\udde6-\uddff]|\ud83c[\ude01-\ude02]|\ud83c\ude1a|\ud83c\ude2f|\ud83c[\ude32-\ude3a]|\ud83c[\ude50-\ude51]|\u203c|\u2049|[\u25aa-\u25ab]|\u25b6|\u25c0|[\u25fb-\u25fe]|\u00a9|\u00ae|\u2122|\u2139|\ud83c\udc04|[\u2600-\u26FF]|\u2b05|\u2b06|\u2b07|\u2b1b|\u2b1c|\u2b50|\u2b55|\u231a|\u231b|\u2328|\u23cf|[\u23e9-\u23f3]|[\u23f8-\u23fa]|\ud83c\udccf|\u2934|\u2935|[\u2190-\u21ff])\s*/g;
+
 function setupTeamSelectorListeners() {
     document.getElementById('teamA-select')?.addEventListener('change', () => updateTeamDisplay('A'));
     document.getElementById('teamB-select')?.addEventListener('change', () => updateTeamDisplay('B'));
 }
 
 function updateTeamDisplay(side) {
-    const select  = document.getElementById(`team${side}-select`);
+    const select   = document.getElementById(`team${side}-select`);
     const teamName = select?.value;
-    const data    = WORLD_CUP_DATA.teams[teamName];
+    const data     = WORLD_CUP_DATA.teams[teamName];
 
     const flag = document.getElementById(`flag${side}`);
     const name = document.getElementById(`name${side}`);
@@ -275,14 +293,14 @@ function updateTeamDisplay(side) {
     if (!flag) return;
 
     if (data) {
-        flag.innerHTML = data.flagHtml;
+        flag.innerHTML  = data.flagHtml;
         name.textContent = teamName;
         const hostBadge = data.hostCountry ? ' 🏠' : '';
-        rank.innerHTML = `FIFA #${data.fifaRanking} • ELO ${data.eloRating}${hostBadge}`;
+        rank.innerHTML  = `FIFA #${data.fifaRanking} • ELO ${data.eloRating}${hostBadge}`;
     } else {
         flag.textContent = '🏳️';
         name.textContent = '—';
-        rank.innerHTML = '';
+        rank.innerHTML   = '';
     }
 }
 
@@ -293,23 +311,27 @@ async function runPrediction() {
     const teamA = document.getElementById('teamA-select').value;
     const teamB = document.getElementById('teamB-select').value;
     if (!teamA || !teamB) { showAlert('Selecciona dos equipos'); return; }
-    if (teamA === teamB) { showAlert('Selecciona equipos diferentes'); return; }
+    if (teamA === teamB)  { showAlert('Selecciona equipos diferentes'); return; }
 
-    const btn = document.getElementById('predictBtn');
+    const btn  = document.getElementById('predictBtn');
     const orig = btn.innerHTML;
     btn.innerHTML = '<span class="spinner"></span> Calculando...';
-    btn.disabled = true;
+    btn.disabled  = true;
 
-    // Pequeño delay para permitir al UI actualizarse
     await delay(50);
 
     try {
-        // Asegurar que el motor local use el modelo seleccionado en la UI de Partido Individual
-        const currentModel = document.getElementById('singleMatchModel') ? document.getElementById('singleMatchModel').value : 'standard';
-        engine.modelType = currentModel;
-        
-        const result     = engine.predictMatch(teamA, teamB);
+        const currentModel = document.getElementById('singleMatchModel')?.value || 'standard';
+        engine.modelType   = currentModel;
+
+        const result = engine.predictMatch(teamA, teamB);
         if (result.error) throw new Error(result.error);
+
+        // Guardar predicción en ResultsManager para evaluación posterior
+        if (resultsManager) {
+            resultsManager.savePrediction(teamA, teamB, result);
+        }
+
         const comparison = engine.compareTeams(teamA, teamB);
         displayPrediction(result, comparison);
     } catch (err) {
@@ -317,7 +339,7 @@ async function runPrediction() {
         showAlert('Error en la predicción: ' + err.message);
     } finally {
         btn.innerHTML = orig;
-        btn.disabled = false;
+        btn.disabled  = false;
     }
 }
 
@@ -335,7 +357,6 @@ function displayPrediction(result, comparison) {
     const dataA = WORLD_CUP_DATA.teams[result.teamA];
     const dataB = WORLD_CUP_DATA.teams[result.teamB];
 
-    // ---- TARJETAS DE EQUIPO AMPLIADAS ----
     function buildTeamCard(teamName, data, side) {
         if (!data) return '';
         const f = data.recentForm;
@@ -345,7 +366,7 @@ function displayPrediction(result, comparison) {
         const goalsAvg = data.teamStats ? data.teamStats.avgGoalsScored.toFixed(2) : '—';
         const concAvg  = data.teamStats ? data.teamStats.avgGoalsConceded.toFixed(2) : '—';
         const titles   = data.worldCupTitles > 0
-            ? `<span style="color:#f59e0b">${'⭐'.repeat(Math.min(data.worldCupTitles,5))}</span> ${data.worldCupTitles} título${data.worldCupTitles>1?'s':''}`
+            ? `<span style="color:#f59e0b">${'⭐'.repeat(Math.min(data.worldCupTitles, 5))}</span> ${data.worldCupTitles} título${data.worldCupTitles > 1 ? 's' : ''}`
             : '<span style="color:var(--text-muted)">Sin títulos</span>';
         const hostBadge = data.hostCountry ? '<span class="host-badge">🏠 Local</span>' : '';
         return `
@@ -359,7 +380,7 @@ function displayPrediction(result, comparison) {
                     <div class="tdc-item"><span class="tdc-label">🏅 Títulos</span><span class="tdc-val">${titles}</span></div>
                     <div class="tdc-item"><span class="tdc-label">📅 Mundiales</span><span class="tdc-val">${data.worldCupAppearances}</span></div>
                     <div class="tdc-item"><span class="tdc-label">⚽ Goles/PJ</span><span class="tdc-val">${goalsAvg}</span></div>
-                    <div class="tdc-item"><span class="tdc-label">🛱️ Conc./PJ</span><span class="tdc-val">${concAvg}</span></div>
+                    <div class="tdc-item"><span class="tdc-label">🛡️ Conc./PJ</span><span class="tdc-val">${concAvg}</span></div>
                     <div class="tdc-item tdc-wide"><span class="tdc-label">📊 Forma (${total} PJ)</span>
                         <span class="tdc-val form-record">
                             <span class="form-w">V${f.wins}</span>
@@ -375,9 +396,7 @@ function displayPrediction(result, comparison) {
         `;
     }
 
-    // Insertar tarjetas en probBars section
-    const probBarsEl = document.getElementById('probBars');
-    probBarsEl.innerHTML = `
+    document.getElementById('probBars').innerHTML = `
         <div class="team-cards-row">
             ${buildTeamCard(result.teamA, dataA, 'A')}
             <div class="team-cards-center">
@@ -404,7 +423,7 @@ function displayPrediction(result, comparison) {
         </div>
     `;
 
-    // Marcador más probable + penales
+    // Penales
     let penHtml = '';
     if (result.penaltyInfo) {
         penHtml = `
@@ -418,41 +437,34 @@ function displayPrediction(result, comparison) {
         `;
     }
 
-    // H2H Historial
-    const h2hA = dataA.h2h?.[result.teamB];
-    const h2hB = dataB.h2h?.[result.teamA];
-    const h2hText = h2hA || h2hB;
-    let h2hHtml = '';
-    if (h2hText) {
-        h2hHtml = `
-            <div style="background:var(--bg-glass);padding:1.2rem;border-radius:12px;margin-bottom:1.5rem;border-left:4px solid var(--accent-gold);font-size:0.95rem;text-align:left">
-                <div style="color:var(--accent-gold);margin-bottom:0.5rem;font-weight:600">📜 Historial (H2H)</div>
-                <div style="color:var(--text-secondary);line-height:1.4">${h2hText}</div>
-            </div>
-        `;
-    }
+    // H2H
+    const h2hText = dataA.h2h?.[result.teamB] || dataB.h2h?.[result.teamA];
+    const h2hHtml = h2hText ? `
+        <div style="background:var(--bg-glass);padding:1.2rem;border-radius:12px;margin-bottom:1.5rem;border-left:4px solid var(--accent-gold);font-size:0.95rem;text-align:left">
+            <div style="color:var(--accent-gold);margin-bottom:0.5rem;font-weight:600">📜 Historial (H2H)</div>
+            <div style="color:var(--text-secondary);line-height:1.4">${h2hText}</div>
+        </div>
+    ` : '';
 
+    // Apuestas
     let betHtml = '';
-    if (result.bettingRecommendations && result.bettingRecommendations.length > 0) {
+    if (result.bettingRecommendations?.length > 0) {
         const recList = result.bettingRecommendations.map(r => `
             <div style="background: rgba(16,185,129,0.08); border-left: 3px solid var(--accent-emerald); padding: 0.8rem 1rem; border-radius: 8px; display: flex; align-items: center; gap: 0.8rem; flex: 1; min-width: 240px; box-shadow: inset 0 0 10px rgba(0,0,0,0.2);">
-                <div style="font-size: 1.4rem; width: 30px; text-align: center; filter: drop-shadow(0 2px 3px rgba(0,0,0,0.5));">${r.icon}</div>
+                <div style="font-size: 1.4rem; width: 30px; text-align: center;">${r.icon}</div>
                 <div>
                     <div style="color: var(--text-muted); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 0.2rem; font-weight: 600;">${r.market}</div>
                     <div style="color: #ffffff; font-weight: 500; font-size: 0.95rem;">${r.tip}</div>
                 </div>
             </div>
         `).join('');
-
         betHtml = `
             <div style="margin-top: 2rem; background: var(--bg-glass); border: 1px solid rgba(16,185,129,0.2); padding: 1.5rem; border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);">
                 <div style="display: flex; align-items: center; gap: 0.8rem; margin-bottom: 1.2rem; padding-bottom: 0.8rem; border-bottom: 1px solid rgba(255,255,255,0.05);">
-                    <span style="font-size: 1.5rem; filter: drop-shadow(0 0 8px rgba(16,185,129,0.8));">🎯</span>
-                    <h3 style="margin: 0; color: var(--accent-emerald); font-weight: 800; font-size: 1.05rem; text-transform: uppercase; letter-spacing: 1.5px; text-shadow: 0 0 10px rgba(16,185,129,0.3);">Inteligencia Analítica de Apuestas</h3>
+                    <span style="font-size: 1.5rem;">🎯</span>
+                    <h3 style="margin: 0; color: var(--accent-emerald); font-weight: 800; font-size: 1.05rem; text-transform: uppercase; letter-spacing: 1.5px;">Inteligencia Analítica de Apuestas</h3>
                 </div>
-                <div style="display: flex; flex-wrap: wrap; gap: 1rem;">
-                    ${recList}
-                </div>
+                <div style="display: flex; flex-wrap: wrap; gap: 1rem;">${recList}</div>
             </div>
         `;
     }
@@ -484,14 +496,14 @@ function displayPrediction(result, comparison) {
                 <div class="score-rank ${i === 0 ? 'rank-1' : ''}">${i + 1}</div>
                 <div class="score-value-text">${s.score}</div>
                 <div class="score-prob-bar">
-                    <div class="score-prob-fill" style="width:${(parseFloat(s.probability)/maxP)*100}%"></div>
+                    <div class="score-prob-fill" style="width:${(parseFloat(s.probability) / maxP) * 100}%"></div>
                 </div>
                 <div class="score-prob-text">${s.probability}%</div>
             </div>
         `).join('');
     }
 
-    // Comparación detallada
+    // Comparación
     const comp = comparison.comparison;
     const metrics = [
         { key: 'fifaRanking',      label: 'Ranking FIFA',       invert: true,  fmt: v => `#${v}` },
@@ -526,14 +538,12 @@ function displayPrediction(result, comparison) {
         `;
     }).join('');
 
-    // Convocatoria completa organizada por posición
     renderFullSquads(result.teamA, result.teamB);
-
     container.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
 // ============================================================
-// CONVOCATORIA COMPLETA POR POSICIÓN
+// CONVOCATORIA
 // ============================================================
 function renderFullSquads(teamAName, teamBName) {
     const grid = document.getElementById('playersGrid');
@@ -544,9 +554,7 @@ function renderFullSquads(teamAName, teamBName) {
         if (!team) return '';
 
         const positions = { POR: [], DEF: [], MED: [], DEL: [] };
-        (team.players || []).forEach(p => {
-            if (positions[p.position]) positions[p.position].push(p);
-        });
+        (team.players || []).forEach(p => { if (positions[p.position]) positions[p.position].push(p); });
 
         const posIcons = { POR: '🧤', DEF: '🛡️', MED: '⚙️', DEL: '🎯' };
         const posNames = { POR: 'Porteros', DEF: 'Defensas', MED: 'Mediocampistas', DEL: 'Delanteros' };
@@ -568,7 +576,7 @@ function renderFullSquads(teamAName, teamBName) {
                                 <span class="player-stats">
                                     <span title="Goles">⚽${p.goals || 0}</span>
                                     <span title="Asistencias">🅰️${p.assists || 0}</span>
-                                    <span title="Media Global" style="color:${ratingColor};font-weight:600">${rating}</span>
+                                    <span title="Rating" style="color:${ratingColor};font-weight:600">${rating}</span>
                                 </span>
                             </div>
                         `;
@@ -577,7 +585,7 @@ function renderFullSquads(teamAName, teamBName) {
             `;
         }).join('');
 
-        const topScorer = [...(team.players || [])].sort((a, b) => (b.goals || 0) - (a.goals || 0))[0];
+        const topScorer   = [...(team.players || [])].sort((a, b) => (b.goals   || 0) - (a.goals   || 0))[0];
         const topAssister = [...(team.players || [])].sort((a, b) => (b.assists || 0) - (a.assists || 0))[0];
 
         return `
@@ -588,19 +596,17 @@ function renderFullSquads(teamAName, teamBName) {
                     <span class="coach-label">DT: ${team.coach}</span>
                 </div>
                 <div class="team-quick-stats">
-                    <span title="Goleador">🥇 Gol: ${topScorer?.name || '—'} (${topScorer?.goals || 0})</span>
-                    <span title="Asistidor">🤝 Asist: ${topAssister?.name || '—'} (${topAssister?.assists || 0})</span>
+                    <span>🥇 Gol: ${topScorer?.name || '—'} (${topScorer?.goals || 0})</span>
+                    <span>🤝 Asist: ${topAssister?.name || '—'} (${topAssister?.assists || 0})</span>
                 </div>
-                <div class="squad-list">
-                    ${playersHtml}
-                </div>
+                <div class="squad-list">${playersHtml}</div>
             </div>
         `;
     }).join('');
 }
 
 // ============================================================
-// RANKING DE FAVORITOS
+// FAVORITOS
 // ============================================================
 function renderFavorites() {
     const favs = engine.getFavorites();
@@ -639,11 +645,11 @@ window.selectTeamForPrediction = function (team) {
 };
 
 // ============================================================
-// FASE DE GRUPOS
+// GRUPOS
 // ============================================================
 function renderGroups() {
     const groups = Object.keys(WORLD_CUP_DATA.groups);
-    const grid = document.getElementById('groupsGrid');
+    const grid   = document.getElementById('groupsGrid');
     if (!grid) return;
 
     const difficulty = engine.analyzeGroupDifficulty();
@@ -654,9 +660,9 @@ function renderGroups() {
 
         const diffClass = {
             'Grupo de la Muerte': 'diff-death',
-            'Difícil': 'diff-hard',
-            'Equilibrado': 'diff-medium',
-            'Accesible': 'diff-easy'
+            'Difícil':            'diff-hard',
+            'Equilibrado':        'diff-medium',
+            'Accesible':          'diff-easy'
         }[diff.difficulty] || 'diff-medium';
 
         const matchesHtml = (sim.matches || []).map(m => `
@@ -675,9 +681,7 @@ function renderGroups() {
                     <span class="group-difficulty ${diffClass}">${diff.difficulty} (${diff.avgStrength})</span>
                 </div>
                 <table class="group-table">
-                    <thead>
-                        <tr><th>Equipo</th><th>PJ</th><th>G</th><th>E</th><th>P</th><th>GF</th><th>GC</th><th>DG</th><th>Pts</th></tr>
-                    </thead>
+                    <thead><tr><th>Equipo</th><th>PJ</th><th>G</th><th>E</th><th>P</th><th>GF</th><th>GC</th><th>DG</th><th>Pts</th></tr></thead>
                     <tbody>
                         ${sim.standings.map((t, i) => {
                             const teamData = WORLD_CUP_DATA.teams[t.team];
@@ -696,10 +700,9 @@ function renderGroups() {
                                 <td>${t.losses}</td>
                                 <td>${t.goalsFor}</td>
                                 <td>${t.goalsAgainst}</td>
-                                <td>${t.goalDifference > 0 ? '+'+t.goalDifference : t.goalDifference}</td>
+                                <td>${t.goalDifference > 0 ? '+' + t.goalDifference : t.goalDifference}</td>
                                 <td class="points-cell">${t.points}</td>
-                            </tr>
-                            `;
+                            </tr>`;
                         }).join('')}
                     </tbody>
                 </table>
@@ -718,51 +721,46 @@ function renderGroups() {
 // SIMULACIÓN MONTE CARLO
 // ============================================================
 async function runSimulation() {
-    const iters   = parseInt(document.getElementById('simIterations').value);
+    const iters     = parseInt(document.getElementById('simIterations').value);
     const modelType = document.getElementById('simModel').value;
-    const btn     = document.getElementById('simulateBtn');
-    const progDiv = document.getElementById('simProgress');
-    const resDiv  = document.getElementById('simResults');
+    const btn       = document.getElementById('simulateBtn');
+    const progDiv   = document.getElementById('simProgress');
+    const resDiv    = document.getElementById('simResults');
 
-    btn.disabled = true;
+    btn.disabled  = true;
     btn.innerHTML = '<span class="spinner"></span> Simulando...';
     progDiv.classList.add('visible');
     resDiv.classList.remove('visible');
 
     const fill = document.getElementById('progressFill');
     const text = document.getElementById('progressText');
-    
     text.textContent = 'Iniciando motor matemático...';
     fill.style.width = '0%';
 
-    // Instanciar Web Worker
     const worker = new Worker('simulation.worker.js');
 
-    worker.onmessage = function(e) {
+    worker.onmessage = function (e) {
         if (e.data.type === 'progress') {
             const { completed, total } = e.data;
             fill.style.width = `${Math.round((completed / total) * 100)}%`;
             text.textContent = `Simulando Universos... ${completed.toLocaleString()} / ${total.toLocaleString()}`;
         } else if (e.data.type === 'done') {
-            const allResults = e.data.results;
             fill.style.width = '100%';
-            text.textContent = `✓ ${iters.toLocaleString()} simulaciones completadas en Web Worker`;
-            
+            text.textContent = `✓ ${iters.toLocaleString()} simulaciones completadas`;
             setTimeout(() => {
-                displaySimulationResults(allResults);
-                btn.disabled = false;
+                displaySimulationResults(e.data.results);
+                btn.disabled  = false;
                 btn.innerHTML = '<span>🎲</span> Ejecutar Simulación';
                 setTimeout(() => progDiv.classList.remove('visible'), 2500);
             }, 400);
-            
             worker.terminate();
         }
     };
 
-    worker.onerror = function(err) {
-        console.error("Worker error:", err);
+    worker.onerror = function (err) {
+        console.error('Worker error:', err);
         text.textContent = 'Error en el Worker.';
-        btn.disabled = false;
+        btn.disabled  = false;
         btn.innerHTML = '<span>🎲</span> Reintentar Simulación';
         worker.terminate();
     };
@@ -774,17 +772,17 @@ function displaySimulationResults(results) {
     const tbody = document.getElementById('simTableBody');
     if (!tbody) return;
 
-    const sorted = [...results].sort((a, b) => b.champion - a.champion);
+    const sorted   = [...results].sort((a, b) => b.champion - a.champion);
     const maxChamp = sorted[0]?.champion || 1;
 
     tbody.innerHTML = sorted.map((t, i) => {
-        const champClass = t.champion >= 8 ? 'high' : t.champion >= 3 ? 'medium' : 'low';
-        const teamData = WORLD_CUP_DATA.teams[t.team];
+        const champClass    = t.champion >= 8 ? 'high' : t.champion >= 3 ? 'medium' : 'low';
+        const teamData      = WORLD_CUP_DATA.teams[t.team];
         const champBarWidth = Math.round((t.champion / maxChamp) * 100);
         return `
             <tr class="${i < 3 ? 'sim-top3' : ''}">
-                <td class="sim-rank-cell">${i < 3 ? ['\ud83e\udd47','\ud83e\udd48','\ud83e\udd49'][i] : i+1}</td>
-                <td class="sim-flag-cell" title="${t.team}">${teamData?.flagHtml || t.flag}</td>
+                <td class="sim-rank-cell">${i < 3 ? ['🥇','🥈','🥉'][i] : i + 1}</td>
+                <td class="sim-flag-cell">${teamData?.flagHtml || t.flag}</td>
                 <td class="sim-team-cell">
                     <strong>${t.team}</strong>
                     <small style="display:block;color:var(--text-muted);font-size:0.7rem">${teamData?.confederation || ''} • ELO ${teamData?.eloRating || ''}</small>
@@ -809,51 +807,397 @@ function displaySimulationResults(results) {
 
     document.getElementById('simResults').classList.add('visible');
 
-    // Render Deterministic Probability Funnel
+    // Embudo de probabilidad
     const bracketDiv = document.getElementById('simBracket');
     if (bracketDiv) {
         bracketDiv.style.display = 'block';
-        
-        const r16Teams = [...results].sort((a,b) => b.roundOf16 - a.roundOf16).slice(0, 16);
-        const qfTeams = [...results].sort((a,b) => b.quarterFinals - a.quarterFinals).slice(0, 8);
-        const sfTeams = [...results].sort((a,b) => b.semiFinals - a.semiFinals).slice(0, 4);
-        const fTeams = [...results].sort((a,b) => b.final - a.final).slice(0, 2);
-        const champ = sorted[0];
-
-        const getHtml = (t) => WORLD_CUP_DATA.teams[t]?.flagHtml || '🏳️';
+        const r16Teams = [...results].sort((a, b) => b.roundOf16    - a.roundOf16).slice(0, 16);
+        const qfTeams  = [...results].sort((a, b) => b.quarterFinals - a.quarterFinals).slice(0, 8);
+        const sfTeams  = [...results].sort((a, b) => b.semiFinals   - a.semiFinals).slice(0, 4);
+        const fTeams   = [...results].sort((a, b) => b.final        - a.final).slice(0, 2);
+        const champ    = sorted[0];
+        const getHtml  = t => WORLD_CUP_DATA.teams[t]?.flagHtml || '🏳️';
 
         bracketDiv.innerHTML = `
             <h3 style="text-align:center;margin-bottom:0.5rem;color:var(--accent-primary-light)">Embudos de Probabilidad (Top Equipos por Fase)</h3>
-            <p style="text-align:center;font-size:0.85rem;color:var(--text-muted);margin-bottom:1.5rem">Debido al sorteo dinámico de terceros lugares de la FIFA, las llaves no son fijas. Estos son los equipos con mayor % de llegar a cada fase.</p>
-            
+            <p style="text-align:center;font-size:0.85rem;color:var(--text-muted);margin-bottom:1.5rem">Equipos con mayor % de llegar a cada fase según Monte Carlo.</p>
             <div style="display:flex;flex-direction:column;gap:15px;background:var(--bg-glass);padding:20px;border-radius:12px">
-                
-                <div style="text-align:center;background:rgba(255,215,0,0.1);padding:20px;border-radius:16px;box-shadow:inset 0 0 20px rgba(255,215,0,0.05), 0 4px 15px rgba(0,0,0,0.2)">
+                <div style="text-align:center;background:rgba(255,215,0,0.1);padding:20px;border-radius:16px;">
                     <div style="font-size:0.8rem;color:var(--accent-gold);letter-spacing:1px;margin-bottom:5px">🏆 CAMPEÓN MÁS PROBABLE</div>
-                    <div style="font-size:1.8rem;text-shadow:0 0 10px rgba(255,215,0,0.5)">${getHtml(champ.team)} <b>${champ.team}</b></div>
+                    <div style="font-size:1.8rem;">${getHtml(champ.team)} <b>${champ.team}</b></div>
                 </div>
-
                 <div style="display:flex;justify-content:center;gap:2rem;padding:10px;border-bottom:1px solid rgba(255,255,255,0.05)">
                     <div style="text-align:center"><div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:5px">FINALISTAS</div>
-                    <div style="display:flex;gap:1.5rem;font-size:1.1rem">${fTeams.map(t=>`<div>${getHtml(t.team)} ${t.team}</div>`).join('')}</div></div>
+                    <div style="display:flex;gap:1.5rem;font-size:1.1rem">${fTeams.map(t => `<div>${getHtml(t.team)} ${t.team}</div>`).join('')}</div></div>
                 </div>
-
                 <div style="display:flex;justify-content:center;gap:2rem;padding:10px;border-bottom:1px solid rgba(255,255,255,0.05)">
                     <div style="text-align:center"><div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:5px">SEMIFINALISTAS</div>
-                    <div style="display:flex;gap:1.5rem;font-size:1rem;flex-wrap:wrap;justify-content:center">${sfTeams.map(t=>`<div>${getHtml(t.team)} ${t.team}</div>`).join('')}</div></div>
+                    <div style="display:flex;gap:1.5rem;font-size:1rem;flex-wrap:wrap;justify-content:center">${sfTeams.map(t => `<div>${getHtml(t.team)} ${t.team}</div>`).join('')}</div></div>
                 </div>
-
                 <div style="display:flex;justify-content:center;gap:2rem;padding:10px;border-bottom:1px solid rgba(255,255,255,0.05)">
                     <div style="text-align:center"><div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:5px">CUARTOS DE FINAL</div>
-                    <div style="display:flex;gap:1.2rem;font-size:0.9rem;flex-wrap:wrap;justify-content:center;color:var(--text-secondary)">${qfTeams.map(t=>`<div>${getHtml(t.team)} ${t.team}</div>`).join('')}</div></div>
+                    <div style="display:flex;gap:1.2rem;font-size:0.9rem;flex-wrap:wrap;justify-content:center;color:var(--text-secondary)">${qfTeams.map(t => `<div>${getHtml(t.team)} ${t.team}</div>`).join('')}</div></div>
                 </div>
-
                 <div style="display:flex;justify-content:center;gap:2rem;padding:10px">
                     <div style="text-align:center"><div style="font-size:0.75rem;color:var(--text-muted);margin-bottom:5px">OCTAVOS DE FINAL</div>
-                    <div style="display:flex;gap:1rem;font-size:0.85rem;flex-wrap:wrap;justify-content:center;color:var(--text-muted)">${r16Teams.map(t=>`<div>${getHtml(t.team)} ${t.team}</div>`).join('')}</div></div>
+                    <div style="display:flex;gap:1rem;font-size:0.85rem;flex-wrap:wrap;justify-content:center;color:var(--text-muted)">${r16Teams.map(t => `<div>${getHtml(t.team)} ${t.team}</div>`).join('')}</div></div>
                 </div>
-
             </div>
         `;
     }
+}
+
+// ============================================================
+// TAB RESULTADOS REALES
+// ============================================================
+function populateResultsSelectors() {
+    const selA = document.getElementById('resultTeamA');
+    const selB = document.getElementById('resultTeamB');
+    if (!selA || !selB) return;
+
+    // Resetear
+    selA.innerHTML = '<option value="">Seleccionar equipo...</option>';
+    selB.innerHTML = '<option value="">Seleccionar equipo...</option>';
+
+    Object.keys(WORLD_CUP_DATA.groups).forEach(group => {
+        const teams = WORLD_CUP_DATA.groups[group];
+        const ogA = document.createElement('optgroup');
+        const ogB = document.createElement('optgroup');
+        ogA.label = ogB.label = `── Grupo ${group} ──`;
+        teams.forEach(team => {
+            const flag = WORLD_CUP_DATA.teams[team]?.flag || '🏳️';
+            ogA.appendChild(new Option(`${flag} ${team}`, team));
+            ogB.appendChild(new Option(`${flag} ${team}`, team));
+        });
+        selA.appendChild(ogA);
+        selB.appendChild(ogB);
+    });
+
+    // Fecha por defecto: hoy
+    const dateInput = document.getElementById('resultDate');
+    if (dateInput) dateInput.value = new Date().toISOString().split('T')[0];
+}
+
+function setupResultsTab() {
+    // Guardar resultado
+    document.getElementById('saveResultBtn')?.addEventListener('click', saveResult);
+
+    // Exportar JSON
+    document.getElementById('exportResultsBtn')?.addEventListener('click', () => {
+        const json = resultsManager.exportJSON();
+        const blob = new Blob([json], { type: 'application/json' });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href     = url;
+        a.download = `WC2026_Resultados_${new Date().toISOString().slice(0, 10)}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+    });
+
+    // Importar JSON
+    document.getElementById('importResultsFile')?.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (ev) => {
+            const res = resultsManager.importJSON(ev.target.result, engine);
+            if (res.error) {
+                alert(`Error importando: ${res.error}`);
+            } else {
+                alert(`✅ Importados: ${res.imported.results} resultados, ${res.imported.predictions} predicciones.`);
+                renderResultsList();
+                renderPerformance();
+                updateCalibrationDisplay();
+            }
+            e.target.value = '';
+        };
+        reader.readAsText(file);
+    });
+
+    // Limpiar todo
+    document.getElementById('clearResultsBtn')?.addEventListener('click', () => {
+        if (!confirm('¿Seguro que deseas eliminar todos los resultados y predicciones? Esta acción no se puede deshacer.')) return;
+        resultsManager.clearAll(engine);
+        renderResultsList();
+        renderPerformance();
+        updateCalibrationDisplay();
+        showFormStatus('', '');
+    });
+}
+
+async function saveResult() {
+    const teamA  = document.getElementById('resultTeamA').value;
+    const teamB  = document.getElementById('resultTeamB').value;
+    const goalsA = parseInt(document.getElementById('resultGoalsA').value);
+    const goalsB = parseInt(document.getElementById('resultGoalsB').value);
+    const date   = document.getElementById('resultDate').value;
+    const stage  = document.getElementById('resultStage').value;
+
+    if (!teamA || !teamB)   return showFormStatus('Selecciona los dos equipos.', 'error');
+    if (teamA === teamB)    return showFormStatus('Los equipos deben ser diferentes.', 'error');
+    if (isNaN(goalsA) || isNaN(goalsB)) return showFormStatus('Ingresa marcadores válidos.', 'error');
+
+    const btn  = document.getElementById('saveResultBtn');
+    const orig = btn.innerHTML;
+    btn.disabled  = true;
+    btn.innerHTML = '⏳ Guardando y recalibrando...';
+
+    await delay(30);
+
+    const res = resultsManager.addResult({ teamA, teamB, goalsA, goalsB, date, competition: 'FIFA World Cup 2026', stage }, engine);
+
+    if (res.error) {
+        showFormStatus(`Error: ${res.error}`, 'error');
+    } else {
+        const upd = res.updateInfo;
+        let msg = `✅ Resultado ${teamA} ${goalsA}–${goalsB} ${teamB} guardado.`;
+        if (upd && !upd.error) {
+            msg += ` ELO: ${teamA} ${upd.eloChangeA > 0 ? '+' : ''}${upd.eloChangeA} → ${upd.newEloA} | ${teamB} ${upd.eloChangeB > 0 ? '+' : ''}${upd.eloChangeB} → ${upd.newEloB}`;
+        }
+        showFormStatus(msg, 'success');
+
+        // Resetear goles
+        document.getElementById('resultGoalsA').value = '0';
+        document.getElementById('resultGoalsB').value = '0';
+
+        renderResultsList();
+        updateCalibrationDisplay();
+
+        // Si el tab de desempeño está abierto, actualizar
+        if (document.getElementById('section-performance')?.classList.contains('active')) {
+            renderPerformance();
+        }
+    }
+
+    btn.disabled  = false;
+    btn.innerHTML = orig;
+}
+
+function showFormStatus(msg, type) {
+    const el = document.getElementById('resultFormStatus');
+    if (!el) return;
+    if (!msg) { el.style.display = 'none'; return; }
+    el.textContent   = msg;
+    el.className     = `form-status-msg ${type}`;
+    el.style.display = 'block';
+    if (type === 'success') setTimeout(() => { el.style.display = 'none'; }, 6000);
+}
+
+function renderResultsList() {
+    const list    = document.getElementById('resultsList');
+    const counter = document.getElementById('resultsCount');
+    if (!list) return;
+
+    const results = resultsManager.getResults();
+    if (counter) counter.textContent = results.length;
+
+    if (results.length === 0) {
+        list.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-icon">📭</div>
+                <p>No hay resultados registrados todavía.</p>
+                <p style="font-size:0.82rem;">Registra el primer partido para comenzar el aprendizaje incremental.</p>
+            </div>`;
+        return;
+    }
+
+    list.innerHTML = results.map(r => {
+        const flagA = WORLD_CUP_DATA.teams[r.teamA]?.flagHtml || '🏳️';
+        const flagB = WORLD_CUP_DATA.teams[r.teamB]?.flagHtml || '🏳️';
+        const winner = r.goalsA > r.goalsB ? r.teamA : r.goalsA < r.goalsB ? r.teamB : 'Empate';
+        const winnerLabel = r.goalsA === r.goalsB ? '🤝 Empate' : `🏆 ${winner}`;
+        const eloInfo = r.updateInfo && !r.updateInfo.error
+            ? `<span class="r-elo-badge">ELO actualizado • ${r.updateInfo.matchesProcessed} pts proc.</span>`
+            : '';
+        return `
+            <div class="results-list-item">
+                <div class="r-teams">
+                    ${flagA} ${r.teamA}
+                    <span class="r-score">${r.goalsA}–${r.goalsB}</span>
+                    ${r.teamB} ${flagB}
+                </div>
+                <div style="display:flex;flex-direction:column;gap:3px;align-items:flex-end">
+                    <div class="r-meta">${r.date} · ${r.stage}</div>
+                    <div class="r-meta">${winnerLabel}</div>
+                    ${eloInfo}
+                </div>
+                <button class="btn-delete-result" onclick="deleteResult('${r.id}')">🗑️</button>
+            </div>
+        `;
+    }).join('');
+}
+
+window.deleteResult = function (id) {
+    if (!confirm('¿Eliminar este resultado? El ELO no se revertirá automáticamente.')) return;
+    const res = resultsManager.deleteResult(id, engine);
+    if (res.success) {
+        renderResultsList();
+        renderPerformance();
+    } else {
+        alert('Error eliminando el resultado.');
+    }
+};
+
+// ============================================================
+// TAB DESEMPEÑO
+// ============================================================
+function renderPerformance() {
+    const container = document.getElementById('performanceMetrics');
+    if (!container) return;
+
+    const metrics = resultsManager ? resultsManager.getQuickMetrics() : null;
+
+    if (!metrics) {
+        container.innerHTML = `
+            <div class="empty-state glass-card">
+                <div class="empty-icon">📊</div>
+                <p>Aquí aparecerán las métricas del modelo.</p>
+                <p style="font-size:0.82rem;">Para calcular métricas necesitas: <br>
+                1. Ejecutar una predicción (tab ⚡ Predictor)<br>
+                2. Registrar el resultado real (tab 📝 Resultados)</p>
+            </div>`;
+        return;
+    }
+
+    // Tarjetas de métricas básicas siempre visibles
+    let basicHtml = `
+        <div class="perf-section-title">📊 Estadísticas Generales</div>
+        <div class="metric-cards-grid">
+            <div class="metric-card blue">
+                <div class="mc-label">Partidos Registrados</div>
+                <div class="mc-value">${metrics.totalMatches}</div>
+                <div class="mc-sub">resultados reales</div>
+            </div>
+            <div class="metric-card gold">
+                <div class="mc-label">Goles/Partido Prom.</div>
+                <div class="mc-value">${metrics.avgGoalsPerMatch}</div>
+                <div class="mc-sub">promedio real</div>
+            </div>
+            <div class="metric-card purple">
+                <div class="mc-label">Tasa de Empates</div>
+                <div class="mc-value">${metrics.drawRate}%</div>
+                <div class="mc-sub">partidos empatados</div>
+            </div>
+        </div>
+    `;
+
+    if (!metrics.hasMetrics) {
+        container.innerHTML = basicHtml + `
+            <div class="glass-card" style="text-align:center;padding:2rem;color:var(--text-muted);">
+                <p>Para ver métricas de precisión del modelo, necesitas haber ejecutado predicciones <em>antes</em> de los partidos.</p>
+                <p style="font-size:0.82rem;">Las predicciones guardadas se comparan automáticamente con los resultados reales al registrarlos.</p>
+            </div>`;
+        return;
+    }
+
+    // Métricas completas de precisión
+    const accColor = metrics.accuracy.winner >= 60 ? 'green' : metrics.accuracy.winner >= 50 ? 'gold' : 'red';
+    const exactColor = metrics.accuracy.exactScore >= 30 ? 'green' : metrics.accuracy.exactScore >= 20 ? 'gold' : 'red';
+
+    let historyHtml = '';
+    if (metrics.history?.length > 0) {
+        // Mini gráfica de tendencia (barras de running accuracy)
+        const maxAcc = 100;
+        historyHtml = `
+            <div class="perf-section-title">📈 Tendencia de Precisión</div>
+            <div class="trend-chart-wrap">
+                <div style="font-size:0.8rem;color:var(--text-muted);">% Aciertos acumulados (ganador) por partido evaluado</div>
+                <div class="trend-chart-bars">
+                    ${metrics.history.map(h => {
+                        const heightPct = Math.round((h.runningAccuracy / maxAcc) * 100);
+                        const color = h.runningAccuracy >= 60 ? '#22c55e' : h.runningAccuracy >= 50 ? '#f59e0b' : '#f87171';
+                        return `<div class="trend-bar-item"
+                            style="height:${heightPct}%;background:${color};opacity:0.85;"
+                            data-tip="${h.teams}: ${h.runningAccuracy}%">
+                        </div>`;
+                    }).join('')}
+                </div>
+            </div>
+            <div class="perf-section-title">📜 Historial Detallado</div>
+            <div style="overflow-x:auto;background:var(--bg-primary);border-radius:12px;border:1px solid var(--border-glass);padding:1px;">
+                <table class="history-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Fecha</th>
+                            <th>Partido</th>
+                            <th>Ganador</th>
+                            <th>Exacto</th>
+                            <th>Acc. Acum.</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${metrics.history.map(h => `
+                            <tr>
+                                <td style="color:var(--text-muted)">${h.idx}</td>
+                                <td style="color:var(--text-muted)">${h.date}</td>
+                                <td>${h.teams}</td>
+                                <td class="${h.correct ? 'badge-correct' : 'badge-incorrect'}">${h.correct ? '✅ Sí' : '❌ No'}</td>
+                                <td class="${h.exactScore ? 'badge-exact' : ''}">${h.exactScore ? '🎯 Sí' : '—'}</td>
+                                <td>
+                                    <div>${h.runningAccuracy}%</div>
+                                    <div class="trend-bar-wrap">
+                                        <div class="trend-bar-fill" style="width:${h.runningAccuracy}%;background:${h.runningAccuracy >= 60 ? '#22c55e' : h.runningAccuracy >= 50 ? '#f59e0b' : '#f87171'}"></div>
+                                    </div>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
+    }
+
+    container.innerHTML = basicHtml + `
+        <div class="perf-section-title">🎯 Precisión del Modelo (${metrics.evaluatedMatches} predicciones evaluadas)</div>
+        <div class="metric-cards-grid">
+            <div class="metric-card ${accColor}">
+                <div class="mc-label">Ganador Acertado</div>
+                <div class="mc-value">${metrics.accuracy.winner}%</div>
+                <div class="mc-sub">objetivo: ≥55%</div>
+            </div>
+            <div class="metric-card ${exactColor}">
+                <div class="mc-label">Marcador Exacto</div>
+                <div class="mc-value">${metrics.accuracy.exactScore}%</div>
+                <div class="mc-sub">objetivo: ≥30%</div>
+            </div>
+        </div>
+        <div class="perf-section-title">📉 Métricas Estadísticas Avanzadas</div>
+        <div class="metric-cards-grid">
+            <div class="metric-card blue">
+                <div class="mc-label">Log Loss</div>
+                <div class="mc-value" style="font-size:1.4rem">${metrics.logLoss}</div>
+                <div class="mc-sub">menor es mejor (óptimo &lt;0.90)</div>
+            </div>
+            <div class="metric-card purple">
+                <div class="mc-label">Brier Score</div>
+                <div class="mc-value" style="font-size:1.4rem">${metrics.brierScore}</div>
+                <div class="mc-sub">menor es mejor (óptimo &lt;0.20)</div>
+            </div>
+            <div class="metric-card gold">
+                <div class="mc-label">MAE Goles</div>
+                <div class="mc-value" style="font-size:1.4rem">${metrics.maeGoals}</div>
+                <div class="mc-sub">error abs. promedio en goles</div>
+            </div>
+            <div class="metric-card blue">
+                <div class="mc-label">RMSE Goles</div>
+                <div class="mc-value" style="font-size:1.4rem">${metrics.rmseGoals}</div>
+                <div class="mc-sub">error cuadrático de goles</div>
+            </div>
+        </div>
+        ${historyHtml}
+    `;
+}
+
+function updateCalibrationDisplay() {
+    if (!engine) return;
+    const cal = engine._calibration;
+    const el  = (id, val) => { const e = document.getElementById(id); if (e) e.textContent = val; };
+
+    el('calMatchesProcessed', cal.matchesProcessed);
+    el('calBiasCorrection',   `${(cal.biasCorrection * 100).toFixed(2)}%`);
+    el('calRhoDynamic',       cal.rhoDynamic?.toFixed(4) ?? '-0.0800');
+
+    const savedAt = resultsManager?._calibration?.savedAt;
+    el('calLastUpdate', savedAt ? new Date(savedAt).toLocaleString('es-MX', { dateStyle: 'short', timeStyle: 'short' }) : '—');
 }
