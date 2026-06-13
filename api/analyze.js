@@ -46,7 +46,7 @@ function buildPrompt(teamA, teamB, prediction, contextualFactors = {}) {
           }`
         : '';
 
-    return `Eres analista experto del Mundial FIFA 2026. Responde en español con markdown. Sé directo y conciso.
+    return `Eres analista experto del Mundial FIFA 2026. Responde en español con markdown.
 
 PARTIDO: ${teamA} vs ${teamB}
 PROBABILIDADES: ${teamA} ${winA}% | Empate ${draw}% | ${teamB} ${winB}%
@@ -54,21 +54,13 @@ GOLES ESPERADOS: λ${teamA}=${lambdaA} | λ${teamB}=${lambdaB} | Total=${(parseF
 MARCADORES PROBABLES: ${topScoresText}
 Over 2.5: ${over25}% | BTTS: ${btts}% | ELO: ${eloDiffText}${contextText}
 
-Responde EXACTAMENTE con estas 4 secciones (máximo 380 palabras en total):
-Responde STRICTAMENTE usando este formato markdown (NO agregues introducciones largas, ve directo a las secciones):
+Genera un análisis experto de este partido incluyendo:
+1. Contexto histórico y táctico del partido
+2. Fortalezas y debilidades de cada equipo
+3. Análisis de las probabilidades y Poisson
+4. Tu predicción final
 
-## 📋 Contexto del Partido
-[2 párrafos: rivalidad histórica y qué está en juego]
-
-## ⚖️ Análisis de Fuerzas
-**${teamA}:** [2 fortalezas] | [1 debilidad]
-**${teamB}:** [2 fortalezas] | [1 debilidad]
-
-## 🔢 Por Qué Estas Probabilidades
-[1 párrafo explicando los % y goles esperados]
-
-## 🏆 Veredicto Final
-[1 párrafo con predicción y marcador]`;
+Usa formato markdown (negritas, subtítulos ##, listas) para hacerlo fácil de leer.`;
 }
 
 /**
@@ -83,7 +75,7 @@ function callGemini(prompt, apiKey) {
                 temperature: 0.75,
                 topK: 40,
                 topP: 0.95,
-                maxOutputTokens: 700,  // Reducido para tier gratuito Gemini + Vercel
+                maxOutputTokens: 2000,
             },
             safetySettings: [
                 { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_ONLY_HIGH' },
