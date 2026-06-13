@@ -77,47 +77,69 @@ export default async function handler(req) {
 
         const prompt = buildPrompt(teamA, teamB, prediction, contextualFactors);
 
-        const geminiReqBody = {
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: {
-                temperature: 0.7,
-                topK: 40,
-                topP: 0.95,
-                maxOutputTokens: 2048,
-            },
-            safetySettings: [
-                { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-                { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-                { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-                { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }
-            ]
-        };
-
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
         
-        const response = await fetch(url, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(geminiReqBody)
-        });
+        let contents = [{ role: 'user', parts: [{ text: prompt }] }];
+        let finalAnalysis = "";
+        let finalFinishReason = "STOP";
+        let iterations = 0;
+        const MAX_ITERATIONS = 4;
 
-        const data = await response.json();
+        while (iterations < MAX_ITERATIONS) {
+            iterations++;
+            
+            const geminiReqBody = {
+                contents: contents,
+                generationConfig: {
+                    temperature: 0.7,
+                    topK: 40,
+                    topP: 0.95,
+                    maxOutputTokens: 2048,
+                },
+                safetySettings: [
+                    { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+                    { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+                    { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+                    { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }
+                ]
+            };
 
-        if (!response.ok) {
-            throw new Error(`Gemini API Error (${data.error?.code}): ${data.error?.message}`);
-        }
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(geminiReqBody)
+            });
 
-        const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-        const finishReason = data.candidates?.[0]?.finishReason;
-        
-        if (!text) {
-            throw new Error(`Respuesta vacía de Gemini. Razón: ${finishReason || 'desconocida'}`);
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(`Gemini API Error (${data.error?.code}): ${data.error?.message}`);
+            }
+
+            const textChunk = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            const finishReason = data.candidates?.[0]?.finishReason;
+            
+            if (!textChunk) {
+                if (finalAnalysis === "") throw new Error(`Respuesta vacía de Gemini. Razón: ${finishReason || 'desconocida'}`);
+                break;
+            }
+
+            finalAnalysis += textChunk;
+            finalFinishReason = finishReason;
+
+            // Si se detuvo por MAX_TOKENS y aún no alcanzamos el límite de iteraciones, pedimos continuación
+            if (finishReason === 'MAX_TOKENS' && iterations < MAX_ITERATIONS) {
+                contents.push({ role: 'model', parts: [{ text: textChunk }] });
+                contents.push({ role: 'user', parts: [{ text: "Continúa el análisis exactamente donde te quedaste, de forma fluida, sin repetir el texto anterior y sin introducciones." }] });
+            } else {
+                break; // Terminó correctamente o por otra razón (ej. SAFETY)
+            }
         }
 
         const responseData = {
             success: true,
-            analysis: text,
-            finishReason: finishReason,
+            analysis: finalAnalysis,
+            finishReason: finalFinishReason + ` (Iteraciones: ${iterations})`,
             teamA,
             teamB,
             probabilities: prediction,
