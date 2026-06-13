@@ -10,8 +10,8 @@
 
 const https = require('https');
 
-// Modelo Gemini — Usando versión estable 1.5-flash
-const GEMINI_MODEL = 'gemini-1.5-flash';
+// Modelo Gemini — gemini-2.5-flash: requerido por la API Key del usuario
+const GEMINI_MODEL = 'gemini-2.5-flash';
 
 // Cache en memoria para evitar llamadas duplicadas por el mismo partido
 // (Se reinicia en cada cold start del serverless function)
