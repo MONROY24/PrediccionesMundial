@@ -51,16 +51,12 @@ function buildPrompt(teamA, teamB, prediction, contextualFactors = {}) {
 PARTIDO: ${teamA} vs ${teamB}
 PROBABILIDADES: ${teamA} ${winA}% | Empate ${draw}% | ${teamB} ${winB}%
 GOLES ESPERADOS: λ${teamA}=${lambdaA} | λ${teamB}=${lambdaB} | Total=${(parseFloat(lambdaA)+parseFloat(lambdaB)).toFixed(2)}
-MARCADORES PROBABLES: ${topScoresText}
-Over 2.5: ${over25}% | BTTS: ${btts}% | ELO: ${eloDiffText}${contextText}
+Genera un análisis experto muy breve (MÁXIMO 3 PÁRRAFOS CORTOS) incluyendo:
+1. Táctica clave de cada equipo
+2. Análisis rápido de las probabilidades
+3. Tu predicción final
 
-Genera un análisis experto de este partido incluyendo:
-1. Contexto histórico y táctico del partido
-2. Fortalezas y debilidades de cada equipo
-3. Análisis de las probabilidades y Poisson
-4. Tu predicción final
-
-Usa formato markdown (negritas, subtítulos ##, listas) para hacerlo fácil de leer.`;
+Sé extremadamente conciso. No superes los 250 palabras en total o el sistema cortará tu respuesta.`;
 }
 
 /**
@@ -72,10 +68,10 @@ function callGemini(prompt, apiKey) {
         const bodyObj = {
             contents: [{ parts: [{ text: prompt }] }],
             generationConfig: {
-                temperature: 0.75,
+                temperature: 0.7,
                 topK: 40,
                 topP: 0.95,
-                maxOutputTokens: 2000,
+                maxOutputTokens: 850,
             },
             safetySettings: [
                 { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_ONLY_HIGH' },
@@ -123,9 +119,9 @@ function callGemini(prompt, apiKey) {
         });
 
         req.on('error', (e) => reject(new Error(`Error de red al llamar Gemini: ${e.message}`)));
-        req.setTimeout(9000, () => {
+        req.setTimeout(9200, () => {
             req.destroy();
-            reject(new Error('Timeout: Gemini tardó más de 9 segundos'));
+            reject(new Error('TIMEOUT_VERCEL: Gemini tardó más de 9 segundos en responder.'));
         });
 
         req.write(body);
@@ -217,7 +213,7 @@ module.exports = async (req, res) => {
     } catch (error) {
         console.error('[analyze] Error:', error.message);
         return res.status(500).json({
-            error: 'Error generando análisis IA. Por favor intenta nuevamente.',
+            error: `Error IA: ${error.message}`,
             details: error.message,
             code: 'GEMINI_ERROR'
         });
