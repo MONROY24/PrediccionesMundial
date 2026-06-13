@@ -1510,6 +1510,7 @@ function renderAIAnalysis(data) {
 
     const timeStr = generatedAt ? new Date(generatedAt).toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' }) : '';
     const cacheTag = fromCache ? '<span class="ai-cache-badge">📦 Desde caché</span>' : '';
+    const debugTag = data.finishReason ? `<span style="font-size:0.75rem; color: #ffb74d; margin-left:10px;">[Debug: ${data.finishReason} | ${analysis.length} chars]</span>` : '';
 
     container.innerHTML = `
         <div class="ai-match-header">
@@ -1535,6 +1536,7 @@ function renderAIAnalysis(data) {
             <span class="ai-model-badge">🤖 ${model || 'gemini-2.0-flash'}</span>
             ${timeStr ? `<span class="ai-time-badge">🕐 ${timeStr}</span>` : ''}
             ${cacheTag}
+            ${debugTag}
         </div>
         <div class="ai-analysis-body">
             ${mdToHtml(analysis)}
