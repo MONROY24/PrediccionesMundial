@@ -62,12 +62,24 @@ class GeminiKeyManager {
     }
 
     getCurrentKey() {
-        const availableKeys = this.getAvailableKeys();
-        if (availableKeys.length === 0) {
-            return null; // Todas están agotadas o no hay claves
+        let availableKeys = this.getAvailableKeys();
+        
+        // Si todas las claves están agotadas, perdonamos el cooldown y las reactivamos todas.
+        // Es mejor que Google devuelva 429 a que nuestro servidor bloquee con 503.
+        if (availableKeys.length === 0 && this.keys.length > 0) {
+            console.warn('[GeminiKeyManager] Todas las claves en cooldown. Forzando reactivación.');
+            for (const key of this.keys) {
+                key.status = 'active';
+                key.cooldownUntil = null;
+            }
+            availableKeys = this.keys;
         }
 
-        // Si currentIndex apunta a una clave agotada, buscar la siguiente válida
+        if (availableKeys.length === 0) {
+            return null; // No hay claves configuradas
+        }
+
+        // Buscar la siguiente válida a partir de currentIndex
         let iterations = 0;
         while (iterations < this.keys.length) {
             const candidate = this.keys[this.currentIndex];
@@ -80,7 +92,7 @@ class GeminiKeyManager {
             iterations++;
         }
 
-        return null;
+        return availableKeys[0];
     }
 
     rotateKey() {
