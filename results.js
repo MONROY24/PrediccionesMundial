@@ -466,7 +466,7 @@ class ResultsManager {
      */
     async loadSharedState(engine) {
         try {
-            const response = await fetch('/api/model-state', {
+            const response = await fetch('/api/status?type=model', {
                 signal: AbortSignal.timeout(5000)
             });
 

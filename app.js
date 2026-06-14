@@ -1389,7 +1389,7 @@ async function triggerAIAnalysis(teamA, teamB, prediction, contextFactors = {}) 
             contextualDesc['Altitud'] = 'Sede a >2000m — desventaja visitante';
         }
 
-        const keyRes = await fetch('/api/get-key');
+        const keyRes = await fetch('/api/status?type=key');
         const keyData = await keyRes.json();
         if (!keyRes.ok) throw new Error(keyData.error || 'Error configurando IA');
         const GEMINI_API_KEY = keyData.key;
