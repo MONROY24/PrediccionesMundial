@@ -1,9 +1,7 @@
-export const config = {
-    runtime: 'edge',
-};
-
-// Modelo Gemini — gemini-3.1-flash-lite: requerido por la API Key del usuario
-const GEMINI_MODEL = 'gemini-3.1-flash-lite';
+// Se elimina runtime: 'edge' para soportar caché local FS en desarrollo
+const PersistentGeminiCache = require('./lib/persistentCache');
+// Modelo Gemini actualizado a 3.5 Flash con Grounding
+const GEMINI_MODEL = 'gemini-3.5-flash';
 
 function buildPrompt(teamA, teamB, prediction, contextualFactors = {}) {
     const { winA, draw, winB, mostLikelyScore, lambdaA, lambdaB,
@@ -77,6 +75,21 @@ export default async function handler(req) {
 
         const prompt = buildPrompt(teamA, teamB, prediction, contextualFactors);
 
+        const cacheKey = `analysis_${teamA}_${teamB}`;
+        const cachedAnalysis = await PersistentGeminiCache.getCachedAnalysis(cacheKey);
+
+        if (cachedAnalysis) {
+            return new Response(JSON.stringify({
+                success: true,
+                analysis: cachedAnalysis.analysis,
+                finishReason: cachedAnalysis.finishReason + ' (Cached)',
+                teamA,
+                teamB,
+                probabilities: prediction,
+                isCached: true
+            }), { headers: { 'Content-Type': 'application/json' } });
+        }
+
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
         
         let contents = [{ role: 'user', parts: [{ text: prompt }] }];
@@ -90,6 +103,7 @@ export default async function handler(req) {
             
             const geminiReqBody = {
                 contents: contents,
+                tools: [{ googleSearch: {} }],
                 generationConfig: {
                     temperature: 0.7,
                     topK: 40,
@@ -119,6 +133,14 @@ export default async function handler(req) {
             const textChunk = data.candidates?.[0]?.content?.parts?.[0]?.text;
             const finishReason = data.candidates?.[0]?.finishReason;
             
+            // Extract grounding chunks from this iteration
+            const chunks = data.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+            chunks.forEach(chunk => {
+                if (chunk.web?.uri && !allSources.includes(chunk.web.uri)) {
+                    allSources.push(chunk.web.uri);
+                }
+            });
+
             if (!textChunk) {
                 if (finalAnalysis === "") throw new Error(`Respuesta vacía de Gemini. Razón: ${finishReason || 'desconocida'}`);
                 break;
@@ -144,8 +166,13 @@ export default async function handler(req) {
             teamB,
             probabilities: prediction,
             generatedAt: new Date().toISOString(),
-            model: GEMINI_MODEL
+            model: GEMINI_MODEL,
+            isCached: false,
+            sources: allSources
         };
+
+        // Guardar en caché por 24 horas asíncronamente
+        PersistentGeminiCache.setCachedAnalysis(cacheKey, responseData, 24).catch(e => console.error(e));
 
         return new Response(JSON.stringify(responseData), {
             status: 200,

@@ -1393,7 +1393,7 @@ async function triggerAIAnalysis(teamA, teamB, prediction, contextFactors = {}) 
         const keyData = await keyRes.json();
         if (!keyRes.ok) throw new Error(keyData.error || 'Error configurando IA');
         const GEMINI_API_KEY = keyData.key;
-        const GEMINI_MODEL = 'gemini-3.1-flash-lite';
+        const GEMINI_MODEL = 'gemini-3.5-flash';
 
         const { lambdaA, lambdaB, topScores = [], eloDiff } = prediction;
         const eloStr = eloDiff > 0 ? `${teamA} superior por ${Math.abs(eloDiff)} ELO` : eloDiff < 0 ? `${teamB} superior por ${Math.abs(eloDiff)} ELO` : 'Equipos parejos';
@@ -1404,7 +1404,7 @@ PARTIDO: ${teamA} vs ${teamB}
 PROBABILIDADES: ${teamA} ${prediction.winA}% | Empate ${prediction.draw}% | ${teamB} ${prediction.winB}%
 GOLES ESPERADOS: λ${teamA}=${lambdaA} | λ${teamB}=${lambdaB} | Total=${(parseFloat(lambdaA)+parseFloat(lambdaB)).toFixed(2)}
 ${ctxStr ? `\nCONTEXTO:\n${ctxStr}` : ''}
-Genera un análisis experto y exhaustivo. No tienes límite de palabras.`;
+Genera un análisis experto y exhaustivo. No tienes límite de palabras. Basa tus argumentos en noticias recientes buscando en internet (Grounding).`;
 
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
         let contents = [{ role: 'user', parts: [{ text: prompt }] }];
@@ -1417,6 +1417,7 @@ Genera un análisis experto y exhaustivo. No tienes límite de palabras.`;
             iterations++;
             const geminiReqBody = {
                 contents,
+                tools: [{ googleSearch: {} }],
                 generationConfig: { temperature: 0.7, topK: 40, topP: 0.95, maxOutputTokens: 2048 },
                 safetySettings: [
                     { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },

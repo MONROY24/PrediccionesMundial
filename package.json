@@ -31,5 +31,8 @@
   },
   "devDependencies": {
     "@vercel/node": "^5.8.17"
+  },
+  "dependencies": {
+    "ioredis": "^5.11.1"
   }
 }

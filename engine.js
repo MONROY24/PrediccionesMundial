@@ -1,6 +1,13 @@
 // ============================================================
 // ENGINE.JS - MOTOR PREDICTIVO v5.0 (MUNDIAL 2026)
 // 
+
+if (typeof module !== 'undefined' && typeof require !== 'undefined') {
+    try {
+        const gw = require('./geminiWeights.js');
+        global.GeminiWeightEngine = gw.GeminiWeightEngine;
+    } catch(e) {}
+}
 // CAMBIOS v5.0 (Auditoría Completa):
 //   - BASE_LAMBDA recalibrado: 1.20 → 1.35 (datos WC 2010-2022)
 //   - Función de escala λ: potencia(1.1) → exponencial calibrada (k=1.8)
@@ -261,36 +268,18 @@ class PredictionEngine {
         // ================================================================
         // INTEGRACIÓN GEMINI QUANTITATIVE INTELLIGENCE ENGINE
         // ================================================================
-        if (geminiMatchupFactors) {
-            const originalLambdaA = lambdaA;
-            const originalLambdaB = lambdaB;
+        let originalLambdaA = lambdaA;
+        let originalLambdaB = lambdaB;
+        let multA = 1.0;
+        let multB = 1.0;
 
-            const { multA, multB } = this.calculateGeminiMatchupAdjustment(geminiMatchupFactors);
+        if (geminiMatchupFactors) {
+            const multipliers = this.calculateGeminiMatchupAdjustment(geminiMatchupFactors);
+            multA = multipliers.multA;
+            multB = multipliers.multB;
             
             lambdaA *= multA;
             lambdaB *= multB;
-
-            // Auditoría asíncrona (fire and forget)
-            let nameA = "Equipo A", nameB = "Equipo B";
-            if (this.teams) {
-                const keys = Object.keys(this.teams);
-                nameA = keys.find(k => this.teams[k] === teamA) || "Equipo A";
-                nameB = keys.find(k => this.teams[k] === teamB) || "Equipo B";
-            }
-
-            setTimeout(() => {
-                if (typeof this.auditPrediction === 'function') {
-                    this.auditPrediction({
-                        timestamp: new Date().toISOString(),
-                        partido: `${nameA} vs ${nameB}`,
-                        json: geminiMatchupFactors,
-                        confidence: geminiMatchupFactors.confidence || 0,
-                        multiplicadores: { multA, multB },
-                        lambda_original: { lambdaA: originalLambdaA, lambdaB: originalLambdaB },
-                        lambda_final: { lambdaA, lambdaB }
-                    });
-                }
-            }, 0);
         }
 
         // Aplicar corrección de sesgo acumulada del aprendizaje incremental
@@ -303,7 +292,7 @@ class PredictionEngine {
         lambdaA = Math.max(0.15, Math.min(this.MAX_GOALS, lambdaA));
         lambdaB = Math.max(0.15, Math.min(this.MAX_GOALS, lambdaB));
 
-        return { lambdaA, lambdaB, pWinA, pWinB, eloDiff };
+        return { lambdaA, lambdaB, pWinA, pWinB, eloDiff, originalLambdaA, originalLambdaB, multA, multB };
     }
 
     getFormMultiplier(team) {
@@ -348,7 +337,32 @@ class PredictionEngine {
             return { error: `Equipo no encontrado: "${teamAName}" o "${teamBName}"` };
         }
 
-        const { lambdaA, lambdaB, pWinA, eloDiff } = this.getGoalExpectancy(teamA, teamB, geminiMatchupFactors);
+        const { lambdaA, lambdaB, pWinA, eloDiff, originalLambdaA, originalLambdaB, multA, multB } = this.getGoalExpectancy(teamA, teamB, geminiMatchupFactors);
+
+        // -- AUDIT PROBABILITIES CALCULATION --
+        let probabilitiesBefore = null;
+        if (geminiMatchupFactors) {
+            let baseWinA = 0, baseDraw = 0, baseWinB = 0;
+            let baseSum = 0;
+            const rho = this._calibration.rhoDynamic || this.RHO;
+            for (let i = 0; i <= this.MAX_GOALS; i++) {
+                for (let j = 0; j <= this.MAX_GOALS; j++) {
+                    const p = this.dixonColes(i, j, originalLambdaA, originalLambdaB, rho);
+                    baseSum += p;
+                    if (i > j) baseWinA += p;
+                    else if (i < j) baseWinB += p;
+                    else baseDraw += p;
+                }
+            }
+            if (baseSum > 0) {
+                probabilitiesBefore = {
+                    winA: ((baseWinA / baseSum) * 100).toFixed(1),
+                    draw: ((baseDraw / baseSum) * 100).toFixed(1),
+                    winB: ((baseWinB / baseSum) * 100).toFixed(1)
+                };
+            }
+        }
+        // -------------------------------------
 
         // Construir matriz de probabilidades (Dixon-Coles bivariada)
         let probMatrix = [];
@@ -387,6 +401,30 @@ class PredictionEngine {
                 if (i + j > 2.5) over25 += p;
                 if (i > 0 && j > 0) btts += p;
             }
+        }
+
+        if (geminiMatchupFactors && typeof this.auditPrediction === 'function') {
+            const probabilitiesAfter = {
+                winA: (winA * 100).toFixed(1),
+                draw: (draw * 100).toFixed(1),
+                winB: (winB * 100).toFixed(1)
+            };
+            this.auditPrediction({
+                timestamp: new Date().toISOString(),
+                matchId: `${teamAName}-vs-${teamBName}-${Date.now()}`,
+                teamA: teamAName,
+                teamB: teamBName,
+                lambdaOriginalA: originalLambdaA,
+                lambdaOriginalB: originalLambdaB,
+                lambdaAdjustedA: lambdaA,
+                lambdaAdjustedB: lambdaB,
+                geminiFactors: geminiMatchupFactors,
+                confidence: geminiMatchupFactors.confidence || 0,
+                geminiMultiplier: { multA, multB },
+                probabilitiesBefore: probabilitiesBefore || probabilitiesAfter,
+                probabilitiesAfter: probabilitiesAfter,
+                reasoning: geminiMatchupFactors.reasoning || "Sin razonamiento"
+            });
         }
 
         // Verificación de coherencia probabilística
@@ -1294,53 +1332,34 @@ class PredictionEngine {
     // AUDITORÍA
     // ============================================================
     auditPrediction(auditData) {
-        const MAX_LOGS = 100;
-        let logs = [];
-
-        // 1. Intentar cargar logs previos
-        if (typeof window !== 'undefined' && window.localStorage) {
+        if (typeof window !== 'undefined') {
+            // Guardar localmente como respaldo temporal
             try {
-                const stored = window.localStorage.getItem('gemini_audit_logs');
-                if (stored) logs = JSON.parse(stored);
-            } catch (e) {}
-        } else if (typeof module !== 'undefined' && typeof require !== 'undefined') {
-            try {
-                const fs = require('fs');
-                if (fs.existsSync('/tmp/gemini_audit_logs.json')) {
-                    const stored = fs.readFileSync('/tmp/gemini_audit_logs.json', 'utf8');
-                    logs = JSON.parse(stored);
-                }
-            } catch (e) {}
-        }
-
-        // 2. Agregar nuevo registro
-        logs.push(auditData);
-
-        // 3. Rotación automática
-        if (logs.length > MAX_LOGS) {
-            logs = logs.slice(logs.length - MAX_LOGS);
-        }
-
-        // 4. Guardar
-        if (typeof window !== 'undefined' && window.localStorage) {
-            try {
+                let logs = JSON.parse(window.localStorage.getItem('gemini_audit_logs') || '[]');
+                logs.push(auditData);
+                if (logs.length > 500) logs = logs.slice(logs.length - 500); // Retener últimos 500
                 window.localStorage.setItem('gemini_audit_logs', JSON.stringify(logs));
-            } catch (e) {}
-        } else if (typeof module !== 'undefined' && typeof require !== 'undefined') {
-            try {
-                const fs = require('fs');
-                fs.writeFileSync('/tmp/gemini_audit_logs.json', JSON.stringify(logs));
-            } catch (e) {}
-        }
-        
-        // Exponer globalmente para consola de debug
-        if (typeof window !== 'undefined' && !window.getGeminiAuditLogs) {
-            window.getGeminiAuditLogs = function() {
-                const currentLogs = window.localStorage.getItem('gemini_audit_logs');
-                const parsed = currentLogs ? JSON.parse(currentLogs) : [];
-                console.table(parsed);
-                return parsed;
-            };
+            } catch(e) {}
+
+            // Enviar de forma asíncrona a la API central (fire-and-forget)
+            // No detenemos la ejecución si falla.
+            fetch('/api/audit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(auditData)
+            }).catch(err => {
+                console.warn('[Audit] Falló el registro de auditoría en la API:', err);
+            });
+
+            // Exponer globalmente para consola de debug
+            if (!window.getGeminiAuditLogs) {
+                window.getGeminiAuditLogs = function() {
+                    const currentLogs = window.localStorage.getItem('gemini_audit_logs');
+                    const parsed = currentLogs ? JSON.parse(currentLogs) : [];
+                    console.table(parsed);
+                    return parsed;
+                };
+            }
         }
     }
 
@@ -1354,10 +1373,33 @@ class PredictionEngine {
         // Si la confianza es menor a 60, descartamos el ajuste
         if (factors.confidence < 60) return { multA: 1.0, multB: 1.0 };
 
-        // El impacto del equipo A: su propio ajuste más el margen táctico
-        let totalImpactA = (factors.teamAAdjustment || 0) + (factors.tacticalEdge || 0);
-        // El impacto del equipo B: su propio ajuste menos el margen táctico (ya que edge positivo favorece al A)
-        let totalImpactB = (factors.teamBAdjustment || 0) - (factors.tacticalEdge || 0);
+        let totalImpactA = 0;
+        let totalImpactB = 0;
+        let breakdownA = {};
+        let breakdownB = {};
+
+        // Uso del GeminiWeightEngine si está disponible
+        if (typeof GeminiWeightEngine !== 'undefined') {
+            const weightEngine = new GeminiWeightEngine();
+            const resA = weightEngine.calculateWeightedGeminiImpact(factors.teamA);
+            const resB = weightEngine.calculateWeightedGeminiImpact(factors.teamB);
+            
+            totalImpactA = resA.totalImpact;
+            totalImpactB = resB.totalImpact;
+            breakdownA = resA.breakdown;
+            breakdownB = resB.breakdown;
+        } else {
+            // Fallback legacy
+            totalImpactA = factors.teamAAdjustment || 0;
+            totalImpactB = factors.teamBAdjustment || 0;
+        }
+
+        // El impacto táctico se suma/resta
+        totalImpactA += (factors.tacticalEdge || 0);
+        totalImpactB -= (factors.tacticalEdge || 0);
+
+        // Guardar desglose explícitamente en el objeto para la auditoría
+        factors.weightBreakdown = { teamA: breakdownA, teamB: breakdownB };
 
         // Convertimos a multiplicadores. Igual que antes, emularemos la escala matemática original (donde
         // la sumatoria vieja llegaba hasta 60). Los nuevos factores están acotados a [-10, 10].

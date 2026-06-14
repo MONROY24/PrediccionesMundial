@@ -1,7 +1,6 @@
-const GEMINI_MODEL = 'gemini-3.1-flash-lite';
+const GEMINI_MODEL = 'gemini-3.5-flash';
 
-// Simple memory cache para minimizar llamadas repetidas durante una sesión (Vercel Free)
-const intelligenceCache = {};
+const PersistentGeminiCache = require('./persistentCache');
 
 function buildQuantitativePrompt(teamA, teamB) {
     return `Eres un Analista Profesional Cuantitativo de selecciones nacionales de fútbol.
@@ -9,26 +8,43 @@ No eres un narrador deportivo. Tu objetivo es proveer señales estructuradas par
 
 Analiza el ENFRENTAMIENTO DIRECTO (Matchup) entre: ${teamA} vs ${teamB}.
 Debes evaluarlos como una única unidad interactiva, no de forma aislada.
-Considera:
-- Diferencias tácticas y estilos de juego
+Considera e investiga en internet:
+- Diferencias tácticas y estilos de juego recientes
 - Fortalezas ofensivas vs Fortalezas defensivas
 - Vulnerabilidades específicas que el rival puede explotar
-- Enfrentamientos recientes y compatibilidad táctica
-- Lesiones o sanciones recientes (solo si hay evidencia clara)
-- Considera el peso de la información (ej. lesiones pesan 35%, táctica 15%, etc.) en tu evaluación global de ajuste.
+- Lesiones o sanciones recientes de jugadores clave
+- Convocatorias de último minuto o ausencias notables
+- Cambios recientes de entrenador
+- Motivación y presión psicológica (historia, localía, etc.)
+- Química del equipo (problemas internos conocidos, etc.)
 
 Reglas estrictas:
-1. Responde ÚNICAMENTE con un objeto JSON válido.
-2. No agregues texto fuera del JSON (ni saludos, ni markdown de \`\`\`json).
-3. Evalúa "teamAAdjustment" y "teamBAdjustment" del -10 (muy negativo) al +10 (muy positivo). 0 es neutral.
+1. IMPORTANTE: Utiliza la herramienta de búsqueda en internet (Grounding) para basar tu análisis en información actualizada y verificada. Limita tus búsquedas y criterios a medios de periodismo deportivo confiables.
+2. Responde ÚNICAMENTE con un objeto JSON válido.
+3. No agregues texto fuera del JSON (ni saludos, ni markdown de \`\`\`json).
+3. Evalúa individualmente para CADA EQUIPO los siguientes factores con un puntaje entero del -10 (muy negativo/perjudicial) al +10 (muy positivo/favorable). 0 es neutral.
 4. "tacticalEdge" debe ser entre -10 y +10. Un valor positivo favorece a ${teamA}, un valor negativo favorece a ${teamB}.
 5. "confidence" debe ser un entero entre 0 y 100 indicando qué tan seguro estás de la información actual de este enfrentamiento.
 6. Nunca asumir lesiones, sanciones o conflictos sin evidencia clara.
 
 Formato requerido:
 {
-  "teamAAdjustment": 0,
-  "teamBAdjustment": 0,
+  "teamA": {
+    "injury": 0,
+    "suspension": 0,
+    "coach": 0,
+    "tactical": 0,
+    "motivation": 0,
+    "chemistry": 0
+  },
+  "teamB": {
+    "injury": 0,
+    "suspension": 0,
+    "coach": 0,
+    "tactical": 0,
+    "motivation": 0,
+    "chemistry": 0
+  },
   "tacticalEdge": 0,
   "confidence": 0,
   "reasoning": "Breve explicación analítica del enfrentamiento."
@@ -51,9 +67,21 @@ function sanitizeGeminiFactors(factors, teamA, teamB) {
         return num;
     };
 
+    const sanitizeTeamFactors = (teamObj, teamName) => {
+        const obj = teamObj || {};
+        return {
+            injury: sanitizeValue(obj.injury, -10, 10, 0, `${teamName}.injury`),
+            suspension: sanitizeValue(obj.suspension, -10, 10, 0, `${teamName}.suspension`),
+            coach: sanitizeValue(obj.coach, -10, 10, 0, `${teamName}.coach`),
+            tactical: sanitizeValue(obj.tactical, -10, 10, 0, `${teamName}.tactical`),
+            motivation: sanitizeValue(obj.motivation, -10, 10, 0, `${teamName}.motivation`),
+            chemistry: sanitizeValue(obj.chemistry, -10, 10, 0, `${teamName}.chemistry`)
+        };
+    };
+
     return {
-        teamAAdjustment: sanitizeValue(factors?.teamAAdjustment, -10, 10, 0, 'teamAAdjustment'),
-        teamBAdjustment: sanitizeValue(factors?.teamBAdjustment, -10, 10, 0, 'teamBAdjustment'),
+        teamA: sanitizeTeamFactors(factors?.teamA, 'teamA'),
+        teamB: sanitizeTeamFactors(factors?.teamB, 'teamB'),
         tacticalEdge: sanitizeValue(factors?.tacticalEdge, -10, 10, 0, 'tacticalEdge'),
         confidence: sanitizeValue(factors?.confidence, 0, 100, 0, 'confidence'),
         reasoning: factors?.reasoning || 'No reasoning provided.'
@@ -77,14 +105,16 @@ const geminiKeyManager = require('./GeminiKeyManager');
 async function fetchQuantitativeFactors(teamA, teamB) {
     const matchupName = `${teamA} vs ${teamB}`;
     
-    const strictCacheKey = `${teamA}_vs_${teamB}`;
-    if (intelligenceCache[strictCacheKey]) {
-        return intelligenceCache[strictCacheKey];
+    const strictCacheKey = `quant_${teamA}_vs_${teamB}`;
+    const cachedData = await PersistentGeminiCache.getCachedAnalysis(strictCacheKey);
+    if (cachedData) {
+        return cachedData;
     }
 
     const prompt = buildQuantitativePrompt(teamA, teamB);
     const body = {
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        tools: [{ googleSearch: {} }],
         generationConfig: {
             temperature: 0.2, 
             topK: 40,
@@ -138,13 +168,23 @@ async function fetchQuantitativeFactors(teamA, teamB) {
                 return validateGeminiResponse("{}", teamA, teamB);
             }
 
-            const factors = validateGeminiResponse(text, teamA, teamB);
+            const finalFactors = validateGeminiResponse(text, teamA, teamB);
             
-            intelligenceCache[strictCacheKey] = factors;
-            return factors;
+            // Extraer fuentes de Grounding
+            const groundingChunks = data.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+            const sources = groundingChunks
+                .map(chunk => chunk.web?.uri)
+                .filter(Boolean);
+            
+            finalFactors.sources = sources;
+            
+            // Guardar en caché asíncronamente
+            PersistentGeminiCache.setCachedAnalysis(strictCacheKey, finalFactors, 24).catch(e => console.error(e));
+            
+            return finalFactors;
 
-        } catch (e) {
-            console.warn(`[Gemini Engine] Error crítico llamando a Gemini para ${matchupName} con clave ${keyObj.display}: ${e.message}.`);
+        } catch (error) {
+            console.warn(`[Gemini Engine] Error crítico llamando a Gemini para ${matchupName} con clave ${keyObj.display}: ${error.message}.`);
             // Error de red
             attempts++;
             geminiKeyManager.rotateKey(); 
