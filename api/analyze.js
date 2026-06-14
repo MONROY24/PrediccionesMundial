@@ -155,8 +155,23 @@ module.exports = async function handler(req, res) {
                     if (!response.ok) {
                         const errCode = data.error?.code;
                         const errMsg = data.error?.message || 'Error desconocido';
+                        const httpStatus = response.status;
+
                         const isQuotaError = errCode === 429 || String(errCode) === '429' ||
+                                            String(httpStatus) === '429' ||
                                             errMsg.includes('quota') || errMsg.includes('RESOURCE_EXHAUSTED');
+
+                        // 503 = modelo saturado → esperar y reintentar con la misma key
+                        const isOverloadError = httpStatus === 503 || String(errCode) === '503' ||
+                                               errMsg.includes('high demand') || errMsg.includes('overloaded') ||
+                                               errMsg.includes('temporarily unavailable');
+
+                        if (isOverloadError) {
+                            const waitMs = 2000 * iterations; // backoff: 2s, 4s, 6s
+                            console.warn(`[analyze] Modelo saturado (503). Esperando ${waitMs}ms antes de reintentar...`);
+                            await new Promise(r => setTimeout(r, waitMs));
+                            continue; // Reintentar la misma key y mismo modo (con/sin Grounding)
+                        }
 
                         if (isQuotaError) {
                             if (useGrounding) {

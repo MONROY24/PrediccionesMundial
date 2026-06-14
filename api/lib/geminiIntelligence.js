@@ -153,7 +153,21 @@ async function fetchQuantitativeFactors(teamA, teamB) {
                                      (data.error?.message?.toLowerCase().includes('quota')) ||
                                      (data.error?.message?.toLowerCase().includes('exhausted')) ||
                                      (data.error?.message?.toLowerCase().includes('rate limit'));
-                                     
+
+                // 503 = modelo saturado → esperar y reintentar
+                const isOverloadError = response.status === 503 || 
+                                        (data.error?.message?.toLowerCase().includes('high demand')) ||
+                                        (data.error?.message?.toLowerCase().includes('overloaded')) ||
+                                        (data.error?.message?.toLowerCase().includes('temporarily unavailable'));
+
+                if (isOverloadError) {
+                    const waitMs = 2000 * (attempts + 1);
+                    console.warn(`[Gemini Engine] Modelo saturado (503) para ${matchupName}. Esperando ${waitMs}ms...`);
+                    await new Promise(r => setTimeout(r, waitMs));
+                    attempts++;
+                    continue; // Reintentar sin rotar key ni cambiar Grounding
+                }
+                     
                 if (isQuotaError) {
                     if (useGrounding) {
                         // Fallback: desactivar Grounding y reintentar con la MISMA key
