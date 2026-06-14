@@ -1377,44 +1377,153 @@ async function triggerAIAnalysis(teamA, teamB, prediction, contextFactors = {}) 
     _aiAnalysisAbort = new AbortController();
 
     try {
-        // Construir descripción de factores contextuales
+        // ─────────────────────────────────────────────────────────────────────
+        // ARQUITECTURA CLIENTE-SIDE: El loop de Gemini corre en el NAVEGADOR.
+        // Esto evita el timeout de 10s de Vercel Hobby.
+        // El servidor solo se usa como túnel seguro para obtener la API Key.
+        // ─────────────────────────────────────────────────────────────────────
+
+        // Construir factores contextuales
         const contextualDesc = {};
-        if (contextFactors.teamA?.injuredStars > 0) {
+        if (contextFactors.teamA?.injuredStars > 0)
             contextualDesc[`Lesiones ${teamA}`] = `${contextFactors.teamA.injuredStars} jugador(es) clave`;
-        }
-        if (contextFactors.teamB?.injuredStars > 0) {
+        if (contextFactors.teamB?.injuredStars > 0)
             contextualDesc[`Lesiones ${teamB}`] = `${contextFactors.teamB.injuredStars} jugador(es) clave`;
-        }
-        if (contextFactors.altitude) {
+        if (contextFactors.altitude)
             contextualDesc['Altitud'] = 'Sede a >2000m — desventaja visitante';
+
+        const ctxStr = Object.entries(contextualDesc).filter(([,v])=>v).map(([k,v])=>`- ${k}: ${v}`).join('\n');
+        const { lambdaA, lambdaB, topScores = [], eloDiff, winA, winB, draw, over25, btts } = prediction;
+        const topScoresText = topScores.slice(0,5).map(s=>`${s.score}(${s.probability}%)`).join(' | ');
+        const eloStr = eloDiff > 0 ? `${teamA} superior por ${Math.abs(eloDiff)} pts ELO`
+                     : eloDiff < 0 ? `${teamB} superior por ${Math.abs(eloDiff)} pts ELO`
+                     : 'Equipos parejos en ELO';
+
+        const prompt = `Eres un analista deportivo experto del Mundial FIFA 2026. Escribe ÚNICAMENTE en español usando formato markdown profesional.
+
+## DATOS DEL PARTIDO
+- **Enfrentamiento:** ${teamA} vs ${teamB}
+- **Probabilidades:** ${teamA} ${winA}% | Empate ${draw}% | ${teamB} ${winB}%
+- **Goles esperados:** λ${teamA}=${lambdaA} | λ${teamB}=${lambdaB} | Total=${(parseFloat(lambdaA)+parseFloat(lambdaB)).toFixed(2)}
+- **ELO:** ${eloStr}
+- **Marcadores más probables:** ${topScoresText}
+- **Over 2.5:** ${over25}% | **BTTS:** ${btts}%
+${ctxStr ? `\n### Factores contextuales\n${ctxStr}` : ''}
+
+## INSTRUCCIONES
+Escribe un análisis exhaustivo con estas secciones en orden exacto:
+
+### 1. Contexto Histórico y Rivalidad
+### 2. Situación Actual y Novedades (lesiones, sanciones, forma reciente)
+### 3. Análisis Táctico (fortalezas y debilidades de cada equipo)
+### 4. Interpretación Estadística (probabilidades Poisson y modelo matemático)
+### 5. Predicción Final
+
+Sé muy detallado en cada sección. Comienza directamente con la sección 1 sin introducción previa.`;
+
+        // Obtener API Key activa del servidor (túnel seguro)
+        const keyRes = await fetch('/api/status?type=key', { signal: _aiAnalysisAbort.signal });
+        const keyData = await keyRes.json();
+        if (!keyRes.ok) throw new Error(keyData.error || 'Error obteniendo API Key');
+        const GEMINI_API_KEY = keyData.key;
+        const GEMINI_MODEL   = 'gemini-3.5-flash';
+
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+
+        let contents         = [{ role: 'user', parts: [{ text: prompt }] }];
+        let finalAnalysis    = '';
+        let finalFinishReason= 'STOP';
+        let totalChars       = 0;
+        let iterations       = 0;
+        const MAX_ITERATIONS = 6; // Sin límite de Vercel → podemos hacer más iteraciones
+
+        while (iterations < MAX_ITERATIONS) {
+            iterations++;
+
+            const geminiReqBody = {
+                contents,
+                // Sin Grounding para evitar MALFORMED_FUNCTION_CALL y reducir cuota
+                generationConfig: {
+                    temperature: 0.75,
+                    topK: 40,
+                    topP: 0.95,
+                    maxOutputTokens: 8192
+                },
+                safetySettings: [
+                    { category: 'HARM_CATEGORY_HARASSMENT',        threshold: 'BLOCK_NONE' },
+                    { category: 'HARM_CATEGORY_HATE_SPEECH',       threshold: 'BLOCK_NONE' },
+                    { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+                    { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }
+                ]
+            };
+
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(geminiReqBody),
+                signal: _aiAnalysisAbort.signal
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                const errMsg = data.error?.message || `HTTP ${response.status}`;
+                // Si es quota/503 en el cliente → informar con mensaje claro
+                if (response.status === 429 || errMsg.includes('quota')) {
+                    throw new Error(`Cuota de Gemini agotada. Espera unos minutos e inténtalo de nuevo. (${errMsg})`);
+                }
+                if (response.status === 503) {
+                    // Esperar 3s y reintentar una vez más
+                    if (iterations < 3) {
+                        await new Promise(r => setTimeout(r, 3000));
+                        iterations--; // No contar este intento
+                        continue;
+                    }
+                }
+                throw new Error(`Gemini API Error: ${errMsg}`);
+            }
+
+            const textChunk  = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            const finishReason = data.candidates?.[0]?.finishReason;
+
+            if (!textChunk) {
+                if (finalAnalysis === '') throw new Error(`Gemini no generó texto. Razón: ${finishReason || 'desconocida'}`);
+                break; // Fin natural sin texto extra
+            }
+
+            finalAnalysis    += textChunk;
+            totalChars       += textChunk.length;
+            finalFinishReason = finishReason;
+
+            // Actualizar debug badge en tiempo real
+            const dbgEl = document.getElementById('ai-debug-badge');
+            if (dbgEl) dbgEl.textContent = `[Debug: ${finishReason} | ${totalChars} chars | iter ${iterations}]`;
+
+            if (finishReason === 'MAX_TOKENS' && iterations < MAX_ITERATIONS) {
+                // Continuar desde donde se cortó — SIN repetir título ni intro
+                contents.push({ role: 'model', parts: [{ text: textChunk }] });
+                contents.push({ role: 'user', parts: [{ text: 'Continúa exactamente desde donde cortaste, sin repetir nada de lo anterior.' }] });
+            } else {
+                break; // STOP u otra razón → terminó
+            }
         }
 
-        // Llamar al backend /api/analyze que gestiona el pool completo de keys,
-        // rotación automática, fallback sin Grounding y caché persistente.
-        const response = await fetch('/api/analyze', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                teamA,
-                teamB,
-                prediction,
-                contextualFactors: contextualDesc
-            }),
-            signal: _aiAnalysisAbort.signal
-        });
+        const resultData = {
+            success: true,
+            analysis: finalAnalysis,
+            finishReason: finalFinishReason + ` (${iterations} iter, ${totalChars} chars)`,
+            teamA, teamB,
+            probabilities: prediction,
+            generatedAt: new Date().toISOString(),
+            model: GEMINI_MODEL,
+            isCached: false
+        };
 
-        const responseData = await response.json();
-
-        if (!response.ok || !responseData.success) {
-            throw new Error(responseData.error || `Error del servidor: ${response.status}`);
-        }
-
-        // Guardar en cache local para esta sesión
-        _aiAnalysisCache[cacheKey] = responseData;
-        renderAIAnalysis(responseData);
+        _aiAnalysisCache[cacheKey] = resultData;
+        renderAIAnalysis(resultData);
 
     } catch (err) {
-        if (err.name === 'AbortError') return; // Cancelado por el usuario
+        if (err.name === 'AbortError') return;
         showAIError(err.message, teamA, teamB, prediction, contextFactors);
     }
 }
