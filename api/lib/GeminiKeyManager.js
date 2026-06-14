@@ -2,7 +2,7 @@ class GeminiKeyManager {
     constructor() {
         this.keys = [];
         this.currentIndex = 0;
-        this.COOLDOWN_MS = 5 * 60 * 1000; // 5 minutos de cooldown
+        this.COOLDOWN_MS = 30 * 1000; // 30 segundos de cooldown (límite RPM)
 
         this.initKeys();
     }

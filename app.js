@@ -1467,13 +1467,14 @@ Sé muy detallado en cada sección. Comienza directamente con la sección 1 sin 
 
             if (!response.ok) {
                 const errMsg = data.error?.message || `HTTP ${response.status}`;
-                // Si es quota en el cliente → rotar clave o informar si no quedan
                 if (response.status === 429 || errMsg.includes('quota') || errMsg.includes('RESOURCE_EXHAUSTED')) {
-                    console.warn(`Cuota agotada en la clave actual. Solicitando rotación al servidor...`);
+                    console.warn(`Cuota agotada en la clave actual. Esperando 5s y solicitando rotación...`);
+                    await new Promise(r => setTimeout(r, 5000)); // Sleep de 5s para darle respiro a la API
+                    
                     const rotRes = await fetch(`/api/status?type=key&failedKey=${encodeURIComponent(GEMINI_API_KEY)}`, { signal: _aiAnalysisAbort.signal });
                     const rotData = await rotRes.json();
                     if (!rotRes.ok) {
-                        throw new Error(`Cuota de Gemini agotada en TODAS las claves. Intenta más tarde.`);
+                        throw new Error(`Cuota de Gemini agotada en TODAS las claves. Intenta en 1 minuto.`);
                     }
                     console.log(`Rotación exitosa. Reintentando con nueva clave...`);
                     GEMINI_API_KEY = rotData.key;
