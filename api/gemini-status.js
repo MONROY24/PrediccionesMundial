@@ -1,48 +1,21 @@
 const geminiKeyManager = require('./lib/GeminiKeyManager');
 
-export const config = {
-    runtime: 'edge',
-};
-
-export default async function handler(req) {
+// Node.js Serverless — compatible con ioredis y fs
+module.exports = async function handler(req, res) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
     if (req.method === 'OPTIONS') {
-        return new Response(null, {
-            status: 200,
-            headers: {
-                'Access-Control-Allow-Origin': '*',
-                'Access-Control-Allow-Methods': 'GET, OPTIONS',
-                'Access-Control-Allow-Headers': 'Content-Type'
-            }
-        });
+        res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+        return res.status(200).end();
     }
-
     if (req.method !== 'GET') {
-        return new Response(JSON.stringify({ error: 'Método no permitido. Usa GET.' }), { 
-            status: 405, 
-            headers: { 'Content-Type': 'application/json' } 
-        });
+        return res.status(405).json({ error: 'Método no permitido. Usa GET.' });
     }
-
     try {
         const status = geminiKeyManager.getStatus();
-
-        return new Response(JSON.stringify(status), {
-            status: 200,
-            headers: {
-                'Access-Control-Allow-Origin': '*',
-                'Content-Type': 'application/json'
-            }
-        });
+        return res.status(200).json(status);
     } catch (error) {
-        console.error('[gemini-status edge] Error:', error.message);
-        return new Response(JSON.stringify({
-            error: `Error interno de Key Manager: ${error.message}`
-        }), {
-            status: 500,
-            headers: {
-                'Access-Control-Allow-Origin': '*',
-                'Content-Type': 'application/json'
-            }
-        });
+        console.error('[gemini-status] Error:', error.message);
+        return res.status(500).json({ error: `Error interno: ${error.message}` });
     }
-}
+};
