@@ -1426,7 +1426,7 @@ Sé muy detallado en cada sección. Comienza directamente con la sección 1 sin 
         const keyData = await keyRes.json();
         if (!keyRes.ok) throw new Error(keyData.error || 'Error obteniendo API Key');
         const GEMINI_API_KEY = keyData.key;
-        const GEMINI_MODEL   = 'gemini-3.5-flash';
+        const GEMINI_MODEL   = 'gemini-3.1-flash-lite';
 
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
 
@@ -1442,7 +1442,7 @@ Sé muy detallado en cada sección. Comienza directamente con la sección 1 sin 
 
             const geminiReqBody = {
                 contents,
-                // Sin Grounding para evitar MALFORMED_FUNCTION_CALL y reducir cuota
+                tools: [{ googleSearch: {} }],
                 generationConfig: {
                     temperature: 0.75,
                     topK: 40,

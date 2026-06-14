@@ -1,4 +1,4 @@
-const GEMINI_MODEL = 'gemini-3.5-flash';
+const GEMINI_MODEL = 'gemini-3.1-flash-lite';
 
 const PersistentGeminiCache = require('./persistentCache');
 

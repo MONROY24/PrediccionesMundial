@@ -2,8 +2,8 @@
 const PersistentGeminiCache = require('./lib/persistentCache');
 const geminiKeyManager = require('./lib/GeminiKeyManager');
 
-// Modelo Gemini actualizado a 3.5 Flash con Grounding
-const GEMINI_MODEL = 'gemini-3.5-flash';
+// Modelo Gemini actualizado a 3.1 Flash Lite con Grounding
+const GEMINI_MODEL = 'gemini-3.1-flash-lite';
 
 function buildPrompt(teamA, teamB, prediction, contextualFactors = {}) {
     const { winA, draw, winB, mostLikelyScore, lambdaA, lambdaB,
