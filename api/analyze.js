@@ -28,25 +28,27 @@ function buildPrompt(teamA, teamB, prediction, contextualFactors = {}) {
           }`
         : '';
 
-    return `Eres analista experto del Mundial FIFA 2026. Responde en español con markdown.
+    return `Eres un analista deportivo experto del Mundial FIFA 2026. Escribe ÚNICAMENTE en español usando formato markdown profesional.
 
-PARTIDO: ${teamA} vs ${teamB}
-PROBABILIDADES: ${teamA} ${winA}% | Empate ${draw}% | ${teamB} ${winB}%
-GOLES ESPERADOS: λ${teamA}=${lambdaA} | λ${teamB}=${lambdaB} | Total=${(parseFloat(lambdaA)+parseFloat(lambdaB)).toFixed(2)}
-ELO: ${eloDiffText}
-MARCADORES PROBABLES: ${topScoresText}
-OVER 2.5: ${over25}% | BTTS: ${btts}%
+## DATOS DEL PARTIDO
+- **Enfrentamiento:** ${teamA} vs ${teamB}
+- **Probabilidades:** ${teamA} ${winA}% | Empate ${draw}% | ${teamB} ${winB}%
+- **Goles esperados:** λ${teamA}=${lambdaA} | λ${teamB}=${lambdaB} | Total=${(parseFloat(lambdaA)+parseFloat(lambdaB)).toFixed(2)}
+- **ELO:** ${eloDiffText}
+- **Marcadores más probables:** ${topScoresText}
+- **Over 2.5:** ${over25}% | **BTTS:** ${btts}%
 ${contextText}
 
-Busca en internet noticias recientes de ambos equipos antes de analizar.
-Genera un análisis experto y exhaustivo incluyendo:
-1. Contexto histórico y táctico
-2. Lesiones, sanciones o novedades recientes encontradas
-3. Fortalezas y debilidades de cada equipo
-4. Análisis de las probabilidades y modelo Poisson
-5. Tu predicción final
+## INSTRUCCIONES
+Escribe un análisis exhaustivo y detallado con las siguientes secciones, en este orden exacto:
 
-Sé detallado y profesional. Usa formato markdown (negritas, subtítulos ##, listas).`;
+### 1. Contexto Histórico y Rivalidad
+### 2. Situación Actual y Novedades (lesiones, sanciones, forma reciente)
+### 3. Análisis Táctico (fortalezas y debilidades de cada equipo)
+### 4. Interpretación Estadística (probabilidades Poisson y modelo matemático)
+### 5. Predicción Final
+
+Sé muy detallado en cada sección. No incluyas texto introductorio antes de comenzar las secciones.`;
 }
 
 module.exports = async function handler(req, res) {
@@ -134,7 +136,7 @@ module.exports = async function handler(req, res) {
                             temperature: 0.7,
                             topK: 40,
                             topP: 0.95,
-                            maxOutputTokens: 1024, // Reducido para conservar TPM
+                            maxOutputTokens: 4096,
                         },
                         safetySettings: [
                             { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
@@ -225,8 +227,10 @@ module.exports = async function handler(req, res) {
                     finalFinishReason = finishReason;
 
                     if (finishReason === 'MAX_TOKENS' && iterations < MAX_ITERATIONS) {
+                        // Continuación: solo pasar el texto previo como contexto del modelo,
+                        // NO pedir que repita el título ni la introducción.
                         contents.push({ role: 'model', parts: [{ text: textChunk }] });
-                        contents.push({ role: 'user', parts: [{ text: 'Continúa el análisis donde te quedaste, de forma fluida.' }] });
+                        contents.push({ role: 'user', parts: [{ text: 'Continua escribiendo exactamente desde donde cortaste, sin repetir nada de lo anterior, sin titulo, sin introducción.' }] });
                     } else {
                         break;
                     }
