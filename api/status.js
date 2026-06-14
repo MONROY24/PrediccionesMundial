@@ -56,9 +56,16 @@ module.exports = async (req, res) => {
 
     // --- /api/status?type=key (equivalente a /api/get-key) ---
     if (type === 'key') {
-        const key = process.env.GEMINI_API_KEY;
-        if (!key) return res.status(503).json({ error: 'API Key no configurada' });
-        return res.status(200).json({ key });
+        const failedKey = req.query?.failedKey;
+        if (failedKey) {
+            geminiKeyManager.markKeyAsFailed({ value: failedKey });
+        }
+        
+        const keyObj = geminiKeyManager.getCurrentKey();
+        if (!keyObj) {
+            return res.status(503).json({ error: 'No hay API Keys disponibles o todas están en cooldown.' });
+        }
+        return res.status(200).json({ key: keyObj.value });
     }
 
     // --- /api/status?type=model (equivalente a /api/model-state) ---

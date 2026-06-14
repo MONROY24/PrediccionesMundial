@@ -1421,14 +1421,13 @@ Escribe un análisis exhaustivo con estas secciones en orden exacto:
 
 Sé muy detallado en cada sección. Comienza directamente con la sección 1 sin introducción previa.`;
 
-        // Obtener API Key activa del servidor (túnel seguro)
         const keyRes = await fetch('/api/status?type=key', { signal: _aiAnalysisAbort.signal });
         const keyData = await keyRes.json();
         if (!keyRes.ok) throw new Error(keyData.error || 'Error obteniendo API Key');
-        const GEMINI_API_KEY = keyData.key;
+        let GEMINI_API_KEY = keyData.key;
         const GEMINI_MODEL   = 'gemini-3.1-flash-lite';
 
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+        let url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
 
         let contents         = [{ role: 'user', parts: [{ text: prompt }] }];
         let finalAnalysis    = '';
@@ -1468,9 +1467,19 @@ Sé muy detallado en cada sección. Comienza directamente con la sección 1 sin 
 
             if (!response.ok) {
                 const errMsg = data.error?.message || `HTTP ${response.status}`;
-                // Si es quota/503 en el cliente → informar con mensaje claro
-                if (response.status === 429 || errMsg.includes('quota')) {
-                    throw new Error(`Cuota de Gemini agotada. Espera unos minutos e inténtalo de nuevo. (${errMsg})`);
+                // Si es quota en el cliente → rotar clave o informar si no quedan
+                if (response.status === 429 || errMsg.includes('quota') || errMsg.includes('RESOURCE_EXHAUSTED')) {
+                    console.warn(`Cuota agotada en la clave actual. Solicitando rotación al servidor...`);
+                    const rotRes = await fetch(`/api/status?type=key&failedKey=${encodeURIComponent(GEMINI_API_KEY)}`, { signal: _aiAnalysisAbort.signal });
+                    const rotData = await rotRes.json();
+                    if (!rotRes.ok) {
+                        throw new Error(`Cuota de Gemini agotada en TODAS las claves. Intenta más tarde.`);
+                    }
+                    console.log(`Rotación exitosa. Reintentando con nueva clave...`);
+                    GEMINI_API_KEY = rotData.key;
+                    url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+                    iterations--; // Reintentar la misma iteración
+                    continue;
                 }
                 if (response.status === 503) {
                     // Esperar 3s y reintentar una vez más
