@@ -132,7 +132,9 @@ async function fetchQuantitativeFactors(teamA, teamB) {
                 temperature: 0.2, 
                 topK: 40,
                 topP: 0.95,
-                response_mime_type: "application/json" 
+                // IMPORTANTE: response_mime_type: 'application/json' es incompatible
+                // con tools: googleSearch. Solo se activa cuando NO hay Grounding.
+                ...(useGrounding ? {} : { response_mime_type: 'application/json' })
             }
         };
 
@@ -190,8 +192,19 @@ async function fetchQuantitativeFactors(teamA, teamB) {
             }
 
             const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+            const finishReason = data.candidates?.[0]?.finishReason;
+
+            // MALFORMED_FUNCTION_CALL ocurre cuando Grounding y JSON mode coexisten.
+            // Desactivar Grounding y reintentar con la misma key.
+            if (!text && finishReason === 'MALFORMED_FUNCTION_CALL' && useGrounding) {
+                console.warn(`[Gemini Engine] MALFORMED_FUNCTION_CALL con Grounding en key ${keyObj.display}. Reintentando sin Grounding...`);
+                useGrounding = false;
+                attempts++;
+                continue;
+            }
+
             if (!text) {
-                console.warn(`[Gemini Engine] Respuesta vacía de Gemini para ${matchupName}. Usando neutrales.`);
+                console.warn(`[Gemini Engine] Respuesta vacía de Gemini para ${matchupName} (razón: ${finishReason}). Usando neutrales.`);
                 return validateGeminiResponse("{}", teamA, teamB);
             }
 

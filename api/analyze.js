@@ -205,6 +205,17 @@ module.exports = async function handler(req, res) {
                     const textChunk = data.candidates?.[0]?.content?.parts?.[0]?.text;
                     const finishReason = data.candidates?.[0]?.finishReason;
 
+                    // MALFORMED_FUNCTION_CALL: Grounding e incompatibilidades → reintentar sin Grounding
+                    if (!textChunk && finishReason === 'MALFORMED_FUNCTION_CALL' && useGrounding) {
+                        console.warn(`[analyze] MALFORMED_FUNCTION_CALL con Grounding. Reintentando sin Grounding...`);
+                        useGrounding = false;
+                        iterations = 0;
+                        finalAnalysis = '';
+                        allSources = [];
+                        contents = [{ role: 'user', parts: [{ text: prompt }] }];
+                        continue;
+                    }
+
                     if (!textChunk) {
                         if (finalAnalysis === '') throw new Error(`Respuesta vacía de Gemini. Razón: ${finishReason || 'desconocida'}`);
                         break;
