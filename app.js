@@ -1354,8 +1354,8 @@ function revertContextualEloAdjustment(teamA, teamB) {
  * Siempre muestra el tab de IA disponible; el análisis llega de forma asíncrona.
  */
 async function triggerAIAnalysis(teamA, teamB, prediction, contextFactors = {}) {
-    // Generar clave de cache
-    const cacheKey = `${teamA}_${teamB}_${prediction.winA}`;
+    // Generar clave de cache (añadimos versión para ignorar caches viejos de memoria)
+    const cacheKey = `v2_${teamA}_${teamB}_${prediction.winA}`;
 
     // Preparar el tab de IA para mostrar loading
     const aiSection = document.getElementById('section-ai-analysis');
