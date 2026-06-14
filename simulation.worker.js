@@ -2,7 +2,7 @@
 // SIMULATION WORKER (Web Worker para simulación Monte Carlo)
 // ============================================================
 
-importScripts('engine.js');
+importScripts('config.js', 'engine.js');
 
 self.onmessage = function(e) {
     const { data, iterations, modelType } = e.data;

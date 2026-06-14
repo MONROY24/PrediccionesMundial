@@ -20,27 +20,20 @@ export default async function handler(req) {
         return new Response(JSON.stringify({ error: 'Método no permitido. Usa POST.' }), { status: 405, headers: { 'Content-Type': 'application/json' } });
     }
 
-    const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-    if (!GEMINI_API_KEY) {
-        return new Response(JSON.stringify({
-            error: 'GEMINI_API_KEY no configurada.',
-            code: 'MISSING_API_KEY'
-        }), { status: 503, headers: { 'Content-Type': 'application/json' } });
-    }
-
     try {
         const body = await req.json();
-        const { teamName } = body;
+        const { teamA, teamB } = body;
 
-        if (!teamName) {
-            return new Response(JSON.stringify({ error: 'Falta el parámetro teamName.' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+        if (!teamA || !teamB) {
+            return new Response(JSON.stringify({ error: 'Faltan parámetros teamA y/o teamB.' }), { status: 400, headers: { 'Content-Type': 'application/json' } });
         }
 
-        const factors = await fetchQuantitativeFactors(teamName, GEMINI_API_KEY);
+        const factors = await fetchQuantitativeFactors(teamA, teamB);
 
         return new Response(JSON.stringify({
             success: true,
-            team: teamName,
+            teamA,
+            teamB,
             factors: factors
         }), {
             status: 200,

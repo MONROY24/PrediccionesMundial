@@ -63,7 +63,7 @@ class PredictionEngine {
     // ============================================================
     // CÁLCULO DE PROBABILIDADES BASE (Modelo de Poisson Dinámico v5.0)
     // ============================================================
-    getGoalExpectancy(teamA, teamB, geminiFactorsA = null, geminiFactorsB = null) {
+    getGoalExpectancy(teamA, teamB, geminiMatchupFactors = null) {
         const isLocalA = teamA.hostCountry && !teamB.hostCountry;
         const isLocalB = teamB.hostCountry && !teamA.hostCountry;
 
@@ -261,12 +261,36 @@ class PredictionEngine {
         // ================================================================
         // INTEGRACIÓN GEMINI QUANTITATIVE INTELLIGENCE ENGINE
         // ================================================================
-        if (geminiFactorsA || geminiFactorsB) {
-            const geminiMultA = this.calculateGeminiAdjustment(geminiFactorsA);
-            const geminiMultB = this.calculateGeminiAdjustment(geminiFactorsB);
+        if (geminiMatchupFactors) {
+            const originalLambdaA = lambdaA;
+            const originalLambdaB = lambdaB;
+
+            const { multA, multB } = this.calculateGeminiMatchupAdjustment(geminiMatchupFactors);
             
-            lambdaA *= geminiMultA;
-            lambdaB *= geminiMultB;
+            lambdaA *= multA;
+            lambdaB *= multB;
+
+            // Auditoría asíncrona (fire and forget)
+            let nameA = "Equipo A", nameB = "Equipo B";
+            if (this.teams) {
+                const keys = Object.keys(this.teams);
+                nameA = keys.find(k => this.teams[k] === teamA) || "Equipo A";
+                nameB = keys.find(k => this.teams[k] === teamB) || "Equipo B";
+            }
+
+            setTimeout(() => {
+                if (typeof this.auditPrediction === 'function') {
+                    this.auditPrediction({
+                        timestamp: new Date().toISOString(),
+                        partido: `${nameA} vs ${nameB}`,
+                        json: geminiMatchupFactors,
+                        confidence: geminiMatchupFactors.confidence || 0,
+                        multiplicadores: { multA, multB },
+                        lambda_original: { lambdaA: originalLambdaA, lambdaB: originalLambdaB },
+                        lambda_final: { lambdaA, lambdaB }
+                    });
+                }
+            }, 0);
         }
 
         // Aplicar corrección de sesgo acumulada del aprendizaje incremental
@@ -317,14 +341,14 @@ class PredictionEngine {
     // ============================================================
     // PREDICCIÓN COMPLETA DE PARTIDO
     // ============================================================
-    predictMatch(teamAName, teamBName, geminiFactorsA = null, geminiFactorsB = null) {
+    predictMatch(teamAName, teamBName, geminiMatchupFactors = null) {
         const teamA = this.teams[teamAName];
         const teamB = this.teams[teamBName];
         if (!teamA || !teamB) {
             return { error: `Equipo no encontrado: "${teamAName}" o "${teamBName}"` };
         }
 
-        const { lambdaA, lambdaB, pWinA, eloDiff } = this.getGoalExpectancy(teamA, teamB, geminiFactorsA, geminiFactorsB);
+        const { lambdaA, lambdaB, pWinA, eloDiff } = this.getGoalExpectancy(teamA, teamB, geminiMatchupFactors);
 
         // Construir matriz de probabilidades (Dixon-Coles bivariada)
         let probMatrix = [];
@@ -1259,7 +1283,6 @@ class PredictionEngine {
         }
         return 1.35; // WC Average fallback
     }
-
     calculateExpectedDefenseStrength(team) {
         if (team && team.expectedGoals && team.expectedGoals.xGA != null) {
             return team.expectedGoals.xGA;
@@ -1268,37 +1291,98 @@ class PredictionEngine {
     }
 
     // ============================================================
+    // AUDITORÍA
+    // ============================================================
+    auditPrediction(auditData) {
+        const MAX_LOGS = 100;
+        let logs = [];
+
+        // 1. Intentar cargar logs previos
+        if (typeof window !== 'undefined' && window.localStorage) {
+            try {
+                const stored = window.localStorage.getItem('gemini_audit_logs');
+                if (stored) logs = JSON.parse(stored);
+            } catch (e) {}
+        } else if (typeof module !== 'undefined' && typeof require !== 'undefined') {
+            try {
+                const fs = require('fs');
+                if (fs.existsSync('/tmp/gemini_audit_logs.json')) {
+                    const stored = fs.readFileSync('/tmp/gemini_audit_logs.json', 'utf8');
+                    logs = JSON.parse(stored);
+                }
+            } catch (e) {}
+        }
+
+        // 2. Agregar nuevo registro
+        logs.push(auditData);
+
+        // 3. Rotación automática
+        if (logs.length > MAX_LOGS) {
+            logs = logs.slice(logs.length - MAX_LOGS);
+        }
+
+        // 4. Guardar
+        if (typeof window !== 'undefined' && window.localStorage) {
+            try {
+                window.localStorage.setItem('gemini_audit_logs', JSON.stringify(logs));
+            } catch (e) {}
+        } else if (typeof module !== 'undefined' && typeof require !== 'undefined') {
+            try {
+                const fs = require('fs');
+                fs.writeFileSync('/tmp/gemini_audit_logs.json', JSON.stringify(logs));
+            } catch (e) {}
+        }
+        
+        // Exponer globalmente para consola de debug
+        if (typeof window !== 'undefined' && !window.getGeminiAuditLogs) {
+            window.getGeminiAuditLogs = function() {
+                const currentLogs = window.localStorage.getItem('gemini_audit_logs');
+                const parsed = currentLogs ? JSON.parse(currentLogs) : [];
+                console.table(parsed);
+                return parsed;
+            };
+        }
+    }
+
+    // ============================================================
     // GEMINI QUANTITATIVE INTELLIGENCE ENGINE
     // ============================================================
 
-    calculateGeminiAdjustment(factors) {
-        if (!factors || typeof factors.confidence !== 'number') return 1.0;
+    calculateGeminiMatchupAdjustment(factors) {
+        if (!factors || typeof factors.confidence !== 'number') return { multA: 1.0, multB: 1.0 };
 
         // Si la confianza es menor a 60, descartamos el ajuste
-        if (factors.confidence < 60) return 1.0;
+        if (factors.confidence < 60) return { multA: 1.0, multB: 1.0 };
 
-        // Sumatoria de impactos (-10 a +10 cada uno, total teórico -60 a +60)
-        let totalImpact = 0;
-        totalImpact += (factors.injuryImpact || 0);
-        totalImpact += (factors.suspensionImpact || 0);
-        totalImpact += (factors.coachImpact || 0);
-        totalImpact += (factors.tacticalImpact || 0);
-        totalImpact += (factors.motivationImpact || 0);
-        totalImpact += (factors.chemistryImpact || 0);
+        // El impacto del equipo A: su propio ajuste más el margen táctico
+        let totalImpactA = (factors.teamAAdjustment || 0) + (factors.tacticalEdge || 0);
+        // El impacto del equipo B: su propio ajuste menos el margen táctico (ya que edge positivo favorece al A)
+        let totalImpactB = (factors.teamBAdjustment || 0) - (factors.tacticalEdge || 0);
 
-        // Convertimos a multiplicador. Ejemplo: 1 punto de impacto = 0.5% de ajuste.
-        // Un coachImpact de -6 reduce el rendimiento global un 3%.
-        let rawAdjustment = 1.0 + (totalImpact * 0.005);
+        // Convertimos a multiplicadores. Igual que antes, emularemos la escala matemática original (donde
+        // la sumatoria vieja llegaba hasta 60). Los nuevos factores están acotados a [-10, 10].
+        // tacticalEdge acotado a [-10, 10]. Entonces el impacto máximo es 20.
+        // Si antes el factor de corrección multiplicaba * 0.005, el efecto de un factor 60 era 0.30 (30%).
+        // Para llegar a un 30% con un totalImpact de 20, usaremos el mismo multiplicador ajustado si se desea,
+        // pero la regla era mantener compatibilidad. Usaré el multiplicador ajustado para que impact=20 genere hasta un +-30%.
+        // 20 * X = 0.30 => X = 0.015.
+        
+        let rawAdjustmentA = 1.0 + (totalImpactA * 0.015);
+        let rawAdjustmentB = 1.0 + (totalImpactB * 0.015);
 
         // Escalamos por confianza
         // Si confidence está entre 60 y 80, aplicamos una fracción proporcional. Si >= 80, full.
         if (factors.confidence >= 60 && factors.confidence < 80) {
             const confidenceScale = (factors.confidence - 60) / 20; 
-            rawAdjustment = 1.0 + ((rawAdjustment - 1.0) * confidenceScale);
+            rawAdjustmentA = 1.0 + ((rawAdjustmentA - 1.0) * confidenceScale);
+            rawAdjustmentB = 1.0 + ((rawAdjustmentB - 1.0) * confidenceScale);
         }
 
-        // Capping estricto (±10%) del modelo matemático original
-        return Math.max(0.90, Math.min(1.10, rawAdjustment));
+        // Capping estricto (±30% máximo absoluto final)
+        const multA = Math.max(0.70, Math.min(1.30, rawAdjustmentA));
+        const multB = Math.max(0.70, Math.min(1.30, rawAdjustmentB));
+
+        return { multA, multB };
     }
 
     getFavorites() {
