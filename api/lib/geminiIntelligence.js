@@ -112,19 +112,10 @@ async function fetchQuantitativeFactors(teamA, teamB) {
     }
 
     const prompt = buildQuantitativePrompt(teamA, teamB);
-    const body = {
-        contents: [{ role: 'user', parts: [{ text: prompt }] }],
-        tools: [{ googleSearch: {} }],
-        generationConfig: {
-            temperature: 0.2, 
-            topK: 40,
-            topP: 0.95,
-            response_mime_type: "application/json" 
-        }
-    };
+    let useGrounding = true; // Intentar con Grounding primero
 
     let attempts = 0;
-    const maxAttempts = geminiKeyManager.keys.length > 0 ? geminiKeyManager.keys.length : 1;
+    const maxAttempts = (geminiKeyManager.keys.length > 0 ? geminiKeyManager.keys.length : 1) * 2; // *2 para cubrir intentos con y sin Grounding
 
     while (attempts < maxAttempts) {
         const keyObj = geminiKeyManager.getCurrentKey();
@@ -133,6 +124,17 @@ async function fetchQuantitativeFactors(teamA, teamB) {
             console.warn(`[Gemini Engine] No hay claves activas disponibles para ${matchupName}. Usando neutrales.`);
             return validateGeminiResponse("{}", teamA, teamB);
         }
+
+        const body = {
+            contents: [{ role: 'user', parts: [{ text: prompt }] }],
+            ...(useGrounding ? { tools: [{ googleSearch: {} }] } : {}),
+            generationConfig: {
+                temperature: 0.2, 
+                topK: 40,
+                topP: 0.95,
+                response_mime_type: "application/json" 
+            }
+        };
 
         const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${keyObj.value}`;
 
@@ -147,14 +149,25 @@ async function fetchQuantitativeFactors(teamA, teamB) {
 
             if (!response.ok) {
                 const isQuotaError = response.status === 429 || 
-                                     (data.error && data.error.message && data.error.message.toLowerCase().includes('quota')) ||
-                                     (data.error && data.error.message && data.error.message.toLowerCase().includes('exhausted')) ||
-                                     (data.error && data.error.message && data.error.message.toLowerCase().includes('rate limit'));
+                                     String(response.status) === '429' ||
+                                     (data.error?.message?.toLowerCase().includes('quota')) ||
+                                     (data.error?.message?.toLowerCase().includes('exhausted')) ||
+                                     (data.error?.message?.toLowerCase().includes('rate limit'));
                                      
                 if (isQuotaError) {
+                    if (useGrounding) {
+                        // Fallback: desactivar Grounding y reintentar con la MISMA key
+                        console.warn(`[Gemini Engine] Cuota con Grounding en key ${keyObj.display}. Reintentando sin Grounding...`);
+                        useGrounding = false;
+                        attempts++;
+                        continue;
+                    }
+                    // Sin Grounding también falla → rotar key
+                    console.warn(`[Gemini Engine] Cuota agotada en key ${keyObj.display}. Rotando...`);
                     geminiKeyManager.markKeyAsFailed(keyObj);
+                    useGrounding = true; // Volver a intentar Grounding con la nueva key
                     attempts++;
-                    continue; // Intentar con la siguiente clave
+                    continue;
                 } else {
                     // Error distinto (ej: 400 Bad Request), no quemamos la clave
                     console.warn(`[Gemini Engine] API Error (${response.status}): ${data.error?.message}. Usando neutrales para ${matchupName}.`);

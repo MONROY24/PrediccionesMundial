@@ -115,8 +115,9 @@ module.exports = async function handler(req, res) {
             const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${keyObj.value}`;
             let contents = [{ role: 'user', parts: [{ text: prompt }] }];
             let iterations = 0;
-            const MAX_ITERATIONS = 4;
+            const MAX_ITERATIONS = 3;
             let keyFailed = false;
+            let useGrounding = true; // Intentar con Grounding primero
 
             finalAnalysis = '';
             allSources = [];
@@ -127,12 +128,13 @@ module.exports = async function handler(req, res) {
 
                     const geminiReqBody = {
                         contents,
-                        tools: [{ googleSearch: {} }],
+                        // Solo incluir tools si Grounding está habilitado en este intento
+                        ...(useGrounding ? { tools: [{ googleSearch: {} }] } : {}),
                         generationConfig: {
                             temperature: 0.7,
                             topK: 40,
                             topP: 0.95,
-                            maxOutputTokens: 2048,
+                            maxOutputTokens: 1024, // Reducido para conservar TPM
                         },
                         safetySettings: [
                             { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
@@ -153,9 +155,22 @@ module.exports = async function handler(req, res) {
                     if (!response.ok) {
                         const errCode = data.error?.code;
                         const errMsg = data.error?.message || 'Error desconocido';
-                        // 429 = quota exceeded → rotar clave
-                        if (errCode === 429 || errCode === 'RESOURCE_EXHAUSTED' || errMsg.includes('quota')) {
-                            console.warn(`[analyze] Key ${keyObj.display} agotada (${errCode}). Rotando...`);
+                        const isQuotaError = errCode === 429 || String(errCode) === '429' ||
+                                            errMsg.includes('quota') || errMsg.includes('RESOURCE_EXHAUSTED');
+
+                        if (isQuotaError) {
+                            if (useGrounding) {
+                                // Primer fallback: intentar SIN Grounding con la misma key
+                                console.warn(`[analyze] Cuota con Grounding en key ${keyObj.display}. Reintentando sin Grounding...`);
+                                useGrounding = false;
+                                iterations = 0; // Reiniciar ciclo sin Grounding
+                                finalAnalysis = '';
+                                allSources = [];
+                                contents = [{ role: 'user', parts: [{ text: prompt }] }];
+                                continue;
+                            }
+                            // Sin Grounding también falla → rotar key
+                            console.warn(`[analyze] Cuota agotada sin Grounding en key ${keyObj.display}. Rotando key...`);
                             geminiKeyManager.markKeyAsFailed(keyObj);
                             keyFailed = true;
                             lastError = new Error(`Gemini API Error: ${errMsg}`);
@@ -164,7 +179,7 @@ module.exports = async function handler(req, res) {
                         throw new Error(`Gemini API Error (${errCode}): ${errMsg}`);
                     }
 
-                    // Extraer grounding chunks
+                    // Extraer grounding chunks si los hay
                     const chunks = data.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
                     chunks.forEach(chunk => {
                         if (chunk.web?.uri && !allSources.includes(chunk.web.uri)) {
@@ -185,7 +200,7 @@ module.exports = async function handler(req, res) {
 
                     if (finishReason === 'MAX_TOKENS' && iterations < MAX_ITERATIONS) {
                         contents.push({ role: 'model', parts: [{ text: textChunk }] });
-                        contents.push({ role: 'user', parts: [{ text: 'Continúa el análisis exactamente donde te quedaste, de forma fluida, sin repetir el texto anterior y sin introducciones.' }] });
+                        contents.push({ role: 'user', parts: [{ text: 'Continúa el análisis donde te quedaste, de forma fluida.' }] });
                     } else {
                         break;
                     }
