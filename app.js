@@ -1393,7 +1393,7 @@ async function triggerAIAnalysis(teamA, teamB, prediction, contextFactors = {}) 
         const keyData = await keyRes.json();
         if (!keyRes.ok) throw new Error(keyData.error || 'Error configurando IA');
         const GEMINI_API_KEY = keyData.key;
-        const GEMINI_MODEL = 'gemini-1.5-flash';
+        const GEMINI_MODEL = 'gemini-3.1-flash-lite';
 
         const { lambdaA, lambdaB, topScores = [], eloDiff } = prediction;
         const eloStr = eloDiff > 0 ? `${teamA} superior por ${Math.abs(eloDiff)} ELO` : eloDiff < 0 ? `${teamB} superior por ${Math.abs(eloDiff)} ELO` : 'Equipos parejos';
