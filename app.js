@@ -409,7 +409,8 @@ class PredictionLoadingManager {
                 <div class="ai-team-badge"><strong>${teamB}</strong> ${dataB?.flagHtml || '🏳️'}</div>
             </div>
             <div class="ai-score-chip">⚽ Marcador más probable: <strong>${prediction.mostLikelyScore}</strong></div>
-            <div class="ai-loading-state" id="ai-loading-state-container">
+            ${prediction.geminiAnalysis ? `<div class="ai-brief-summary" style="margin-top: 15px; padding: 15px; background: rgba(255,255,255,0.05); border-radius: 8px; border-left: 3px solid #64ffda; font-size: 0.95rem; line-height: 1.5; color: #e2e8f0;"><strong>Resumen Rápido IA:</strong> ${prediction.geminiAnalysis}</div>` : ''}
+            <div class="ai-loading-state" id="ai-loading-state-container" style="margin-top: 20px;">
                 <div class="ai-spinner-wrap">
                     <img src="MR24.png" alt="Cargando" class="ai-custom-logo" />
                     <div class="ai-loading-text" id="ai-loading-text-main">Iniciando simulación...</div>
@@ -420,9 +421,9 @@ class PredictionLoadingManager {
 
         // Flujo visual informativo progresivo
         const steps = [
-            { t: 0, main: "Ejecutando simulación Monte Carlo...", sub: "Procesando métricas Poisson-Dixon-Coles" },
-            { t: 2000, main: "Inicializando motor de Inteligencia Artificial...", sub: "Estableciendo conexión segura" },
-            { t: 4000, main: "Construyendo análisis táctico...", sub: "Generando explicación detallada" },
+            { t: 0, main: "Contactando Inteligencia Artificial...", sub: "Estableciendo conexión segura" },
+            { t: 2000, main: "Construyendo análisis táctico profundo...", sub: "Redactando informe detallado" },
+            { t: 4000, main: "Procesando predicción final...", sub: "Aplicando modelos de lenguaje" },
             { t: 7000, main: "Finalizando análisis experto...", sub: "Casi listo..." }
         ];
 
@@ -543,8 +544,8 @@ async function runPrediction() {
         // Terminar carga del botón
         predictionLoadingManager.finishMathLoading(btn);
 
-        // ── FASE 8-9: Mostrar análisis Gemini (ya fue ejecutado en backend) ──
-        displayAIAnalysis(result.geminiAnalysis, result.aiContribution > 0, result.modelUsed);
+        // ── FASE 8-9: Luchar por el análisis IA asíncrono profundo ──
+        triggerAIAnalysis(teamA, teamB, result, contextFactors);
 
     } catch (err) {
         console.error(err);
@@ -1504,25 +1505,71 @@ function revertContextualEloAdjustment(teamA, teamB) {
 // FASE 8-9 — INTEGRACIÓN GEMINI IA
 // ============================================================
 
+let _aiAnalysisCache = {};
+let _aiAnalysisAbort = null;
+
 /**
- * Muestra el análisis de la IA que fue retornado por el backend.
+ * Lanza el análisis IA exhaustivo en background tras una predicción.
+ * Permite renderizar el resultado matemático inmediato, mientras descarga el ensayo en MD.
  */
-function displayAIAnalysis(analysisText, isAI, modelUsed) {
+async function triggerAIAnalysis(teamA, teamB, prediction, contextFactors = {}) {
+    const cacheKey = `v3_${teamA}_${teamB}_${prediction.winA}`;
+
     const aiSection = document.getElementById('section-ai-analysis');
     if (aiSection) {
-        // Limpiamos los loaders
-        predictionLoadingManager.finishAILoading();
-        
+        predictionLoadingManager.startAILoading(teamA, teamB, prediction);
         const aiTab = document.querySelector('[data-tab="ai-analysis"]');
-        if (aiTab && isAI) aiTab.classList.add('tab-new-data');
-        
-        const data = {
-            analysis: analysisText,
-            model: modelUsed,
-            generatedAt: new Date().toISOString()
+        if (aiTab) aiTab.classList.add('tab-new-data');
+    }
+
+    if (_aiAnalysisCache[cacheKey]) {
+        predictionLoadingManager.finishAILoading();
+        renderAIAnalysis(_aiAnalysisCache[cacheKey]);
+        return;
+    }
+
+    if (_aiAnalysisAbort) _aiAnalysisAbort.abort();
+    _aiAnalysisAbort = new AbortController();
+
+    try {
+        const response = await fetch('/api/analyze', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ teamA, teamB, prediction, contextualFactors: contextFactors }),
+            signal: _aiAnalysisAbort.signal
+        });
+
+        const data = await response.json();
+
+        predictionLoadingManager.finishAILoading();
+
+        if (!response.ok) {
+            predictionLoadingManager.showAIFallback(data.error || `Error HTTP ${response.status}`);
+            return;
+        }
+
+        if (data.isFallback) {
+            predictionLoadingManager.showAIFallback("El motor IA no está disponible en este momento.");
+            return;
+        }
+
+        const resultData = {
+            success: true,
+            analysis: data.analysis,
+            finishReason: data.finishReason || 'STOP',
+            teamA, teamB,
+            probabilities: prediction,
+            generatedAt: data.generatedAt || new Date().toISOString(),
+            model: data.model || 'gemini-3.5-flash',
+            fromCache: data.isCached || false
         };
-        
-        renderAIAnalysis(data);
+
+        _aiAnalysisCache[cacheKey] = resultData;
+        renderAIAnalysis(resultData);
+
+    } catch (err) {
+        if (err.name === 'AbortError') return;
+        predictionLoadingManager.showAIFallback(err.message);
     }
 }
 
