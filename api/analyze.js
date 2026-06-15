@@ -5,10 +5,10 @@ const geminiKeyManager = require('./_lib/GeminiKeyManager');
 const { GeminiReliabilityEngine, GeminiStatus } = require('./_lib/GeminiReliabilityEngine');
 const GeminiDiagnosticsEngine = require('./_lib/GeminiDiagnosticsEngine');
 
-// Modelo Gemini jerárquico
 const GEMINI_MODELS = [
     'gemini-3.5-flash',       // MODEL_PRIMARY
     'gemini-2.5-flash',       // MODEL_FALLBACK
+    'gemini-1.5-flash',       // MODEL_LEGACY
     'gemini-3.1-flash-lite'   // MODEL_EMERGENCY
 ];
 
