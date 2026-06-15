@@ -1505,9 +1505,6 @@ function revertContextualEloAdjustment(teamA, teamB) {
 // FASE 8-9 — INTEGRACIÓN GEMINI IA
 // ============================================================
 
-let _aiAnalysisCache = {};
-let _aiAnalysisAbort = null;
-
 /**
  * Lanza el análisis IA exhaustivo en background tras una predicción.
  * Permite renderizar el resultado matemático inmediato, mientras descarga el ensayo en MD.
