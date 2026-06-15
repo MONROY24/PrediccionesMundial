@@ -4,8 +4,8 @@
   "description": "Predictor Mundial FIFA 2026 — Motor Poisson-Dixon-Coles + Gemini AI",
   "private": true,
   "scripts": {
-    "start": "npx serve . -l 3000",
-    "dev": "npx serve . -l 3000 --cors",
+    "start": "npx vercel dev",
+    "dev": "npx vercel dev",
     "update-elos": "node update_elite_players.js",
     "update-squads": "node update_squad_values.js",
     "test:engine": "node -e \"const E=require('./engine.js');const d=require('./data.json');const e=new E(d);const r=e.predictMatch('Argentina','Francia');console.log('Argentina vs Francia:',r.winA+'%','draw:'+r.draw+'%','Francia:'+r.winB+'%','Score:',r.mostLikelyScore);\"",
