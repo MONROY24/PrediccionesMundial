@@ -351,7 +351,7 @@ function updateTeamDisplay(side) {
 class PredictionLoadingManager {
     constructor() {
         this.MATH_TIMEOUT = 5000;
-        this.GEMINI_TIMEOUT = 10000;
+        this.GEMINI_TIMEOUT = 120000;
         this.mathTimeoutId = null;
         this.aiTimeoutId = null;
         this.aiProgressInterval = null;
@@ -471,7 +471,7 @@ class PredictionLoadingManager {
                 <div style="font-size:3rem;margin-bottom:1rem">🧮</div>
                 <h3 style="color:var(--text-primary);margin-bottom:0.5rem">Análisis IA no disponible</h3>
                 <p style="color:var(--text-muted);font-size:0.9rem;max-width:400px;margin:0 auto">
-                    ${errorMsg || 'El servicio de IA ha excedido el tiempo de espera (10s).'}<br><br>
+                    ${errorMsg || 'El servicio de IA ha excedido el tiempo de espera (120s).'}<br><br>
                     <strong>Utilizando modelo matemático.</strong> Las probabilidades mostradas arriba son 100% precisas y generadas por el motor estocástico local.
                 </p>
             </div>
