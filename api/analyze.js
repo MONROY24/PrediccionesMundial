@@ -6,10 +6,10 @@ const { GeminiReliabilityEngine, GeminiStatus } = require('./_lib/GeminiReliabil
 const GeminiDiagnosticsEngine = require('./_lib/GeminiDiagnosticsEngine');
 
 const GEMINI_MODELS = [
-    'gemini-3.5-flash',       // MODEL_PRIMARY
-    'gemini-2.5-flash',       // MODEL_FALLBACK
-    'gemini-1.5-flash',       // MODEL_LEGACY
-    'gemini-3.1-flash-lite'   // MODEL_EMERGENCY
+    'gemini-1.5-pro',         // MODEL_PRIMARY (Stable & Detailed)
+    'gemini-1.5-flash',       // MODEL_FALLBACK (Fast & Reliable)
+    'gemini-3.5-flash',       // MODEL_EXPERIMENTAL
+    'gemini-2.5-flash'        // MODEL_EXPERIMENTAL_2
 ];
 
 function buildPrompt(teamA, teamB, prediction, contextualFactors = {}) {
@@ -90,7 +90,7 @@ module.exports = async function handler(req, res) {
         const prompt = buildPrompt(teamA, teamB, prediction, contextualFactors);
 
         // Verificar caché primero
-        const cacheKey = `analysis_${teamA}_${teamB}`;
+        const cacheKey = `analysis_v4_${teamA}_${teamB}`;
         const cachedAnalysis = await PersistentGeminiCache.getCachedAnalysis(cacheKey);
         if (cachedAnalysis) {
             GeminiDiagnosticsEngine.recordDiagnostic({
