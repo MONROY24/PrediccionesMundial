@@ -1,4 +1,4 @@
-const { fetchQuantitativeFactors } = require('./lib/geminiIntelligence');
+const { fetchQuantitativeFactors } = require('./_lib/geminiIntelligence');
 
 // Node.js Serverless — compatible con ioredis, fs y PersistentGeminiCache
 module.exports = async function handler(req, res) {

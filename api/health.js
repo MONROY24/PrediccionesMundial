@@ -1,6 +1,6 @@
-const PersistentGeminiCache = require('./lib/persistentCache');
-const GeminiDiagnosticsEngine = require('./lib/GeminiDiagnosticsEngine');
-const geminiKeyManager = require('./lib/GeminiKeyManager');
+const PersistentGeminiCache = require('./_lib/persistentCache');
+const GeminiDiagnosticsEngine = require('./_lib/GeminiDiagnosticsEngine');
+const geminiKeyManager = require('./_lib/GeminiKeyManager');
 
 module.exports = async function handler(req, res) {
     res.setHeader('Access-Control-Allow-Origin', '*');

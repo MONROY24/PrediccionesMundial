@@ -1,7 +1,7 @@
 const { kv } = require('@vercel/kv');
-const { fetchQuantitativeFactors } = require('./lib/geminiIntelligence');
-const geminiKeyManager = require('./lib/GeminiKeyManager');
-const MathEngine = require('./lib/mathEngine');
+const { fetchQuantitativeFactors } = require('./_lib/geminiIntelligence');
+const geminiKeyManager = require('./_lib/GeminiKeyManager');
+const MathEngine = require('./_lib/mathEngine');
 
 // Función segura de hashing simple para la caché
 function generateCacheKey(teamA, teamB) {

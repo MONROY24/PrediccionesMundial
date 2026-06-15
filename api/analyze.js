@@ -1,9 +1,9 @@
 // Node.js Serverless — compatible con GeminiKeyManager, caché y Grounding
-const PersistentGeminiCache = require('./lib/persistentCache');
-const geminiKeyManager = require('./lib/GeminiKeyManager');
+const PersistentGeminiCache = require('./_lib/persistentCache');
+const geminiKeyManager = require('./_lib/GeminiKeyManager');
 
-const { GeminiReliabilityEngine, GeminiStatus } = require('./lib/GeminiReliabilityEngine');
-const GeminiDiagnosticsEngine = require('./lib/GeminiDiagnosticsEngine');
+const { GeminiReliabilityEngine, GeminiStatus } = require('./_lib/GeminiReliabilityEngine');
+const GeminiDiagnosticsEngine = require('./_lib/GeminiDiagnosticsEngine');
 
 // Modelo Gemini jerárquico
 const GEMINI_MODELS = [

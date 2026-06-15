@@ -4,8 +4,8 @@
 // Reduce el conteo de Serverless Functions en Vercel Hobby.
 // ============================================================
 
-const geminiKeyManager = require('./lib/GeminiKeyManager');
-const PersistentGeminiCache = require('./lib/persistentCache');
+const geminiKeyManager = require('./_lib/GeminiKeyManager');
+const PersistentGeminiCache = require('./_lib/persistentCache');
 
 let kv = null;
 try { kv = require('@vercel/kv').kv; } catch { /* KV no disponible */ }
