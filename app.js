@@ -1553,8 +1553,11 @@ async function triggerAIAnalysis(teamA, teamB, prediction, contextFactors = {}) 
             throw new Error(errData.error || `Error HTTP ${keyRes.status} al obtener API Key`);
         }
         const keyData = await keyRes.json();
-        const GEMINI_API_KEY = keyData.key;
-        const GEMINI_MODEL = 'gemini-1.5-pro'; // Modelo estable preferido
+        const geminiKeys = keyData.keys || [keyData.key]; // Array of keys
+        
+        if (!geminiKeys || geminiKeys.length === 0) throw new Error("No hay API Keys disponibles");
+
+        const GEMINI_MODELS = ['gemini-2.5-flash', 'gemini-1.5-flash', 'gemini-3.5-flash'];
 
         const { lambdaA, lambdaB, topScores = [], eloDiff } = prediction;
         const ctxStr = Object.entries(contextFactors).filter(([,v])=>v).map(([k,v])=>`- ${k}: ${v}`).join('\n');
@@ -1566,50 +1569,98 @@ GOLES ESPERADOS: λ${teamA}=${lambdaA} | λ${teamB}=${lambdaB} | Total=${(parseF
 ${ctxStr ? `\nCONTEXTO:\n${ctxStr}` : ''}
 Genera un análisis experto y exhaustivo. No tienes límite de palabras.`;
 
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
-        let contents = [{ role: 'user', parts: [{ text: prompt }] }];
         let finalAnalysis = "";
         let finalFinishReason = "STOP";
         let iterations = 0;
         const MAX_ITERATIONS = 4;
+        let success = false;
+        let lastError = null;
+        let usedModel = GEMINI_MODELS[0];
 
-        while (iterations < MAX_ITERATIONS) {
-            iterations++;
-            const geminiReqBody = {
-                contents,
-                generationConfig: { temperature: 0.7, topK: 40, topP: 0.95, maxOutputTokens: 2048 },
-                safetySettings: [
-                    { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
-                    { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
-                    { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-                    { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }
-                ]
-            };
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(geminiReqBody),
-                signal: _aiAnalysisAbort.signal
-            });
-            const data = await response.json();
-            if (!response.ok) throw new Error(`Gemini API Error: ${data.error?.message || response.status}`);
+        // Model fallback loop
+        for (let m = 0; m < GEMINI_MODELS.length && !success; m++) {
+            usedModel = GEMINI_MODELS[m];
             
-            const textChunk = data.candidates?.[0]?.content?.parts?.[0]?.text;
-            const finishReason = data.candidates?.[0]?.finishReason;
-            
-            if (!textChunk) {
-                if (finalAnalysis === "") throw new Error(`Respuesta vacía de Gemini. Razón: ${finishReason || 'desconocida'}`);
-                break;
+            // Key rotation loop
+            for (let k = 0; k < geminiKeys.length && !success; k++) {
+                const GEMINI_API_KEY = geminiKeys[k];
+                const url = `https://generativelanguage.googleapis.com/v1beta/models/${usedModel}:generateContent?key=${GEMINI_API_KEY}`;
+                
+                let contents = [{ role: 'user', parts: [{ text: prompt }] }];
+                finalAnalysis = "";
+                iterations = 0;
+                let currentAttemptSuccess = true;
+
+                try {
+                    while (iterations < MAX_ITERATIONS) {
+                        iterations++;
+                        const geminiReqBody = {
+                            contents,
+                            generationConfig: { temperature: 0.7, topK: 40, topP: 0.95, maxOutputTokens: 2048 },
+                            safetySettings: [
+                                { category: 'HARM_CATEGORY_HARASSMENT', threshold: 'BLOCK_NONE' },
+                                { category: 'HARM_CATEGORY_HATE_SPEECH', threshold: 'BLOCK_NONE' },
+                                { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
+                                { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }
+                            ]
+                        };
+
+                        const response = await fetch(url, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(geminiReqBody),
+                            signal: _aiAnalysisAbort.signal
+                        });
+                        
+                        const data = await response.json();
+                        
+                        if (!response.ok) {
+                            if (response.status === 429) throw new Error('QUOTA');
+                            if (response.status === 404 || data.error?.message?.includes('not found')) throw new Error('MODEL_NOT_FOUND');
+                            throw new Error(`Gemini API Error: ${data.error?.message || response.status}`);
+                        }
+                        
+                        const textChunk = data.candidates?.[0]?.content?.parts?.[0]?.text;
+                        const finishReason = data.candidates?.[0]?.finishReason;
+                        
+                        if (!textChunk) {
+                            if (finalAnalysis === "") throw new Error(`Respuesta vacía de Gemini. Razón: ${finishReason || 'desconocida'}`);
+                            break;
+                        }
+                        
+                        finalAnalysis += textChunk;
+                        finalFinishReason = finishReason;
+                        
+                        if (finishReason === 'MAX_TOKENS' && iterations < MAX_ITERATIONS) {
+                            contents.push({ role: 'model', parts: [{ text: textChunk }] });
+                            contents.push({ role: 'user', parts: [{ text: "Continúa el análisis exactamente donde te quedaste, de forma fluida, sin repetir el texto anterior." }] });
+                        } else {
+                            break;
+                        }
+                    }
+                    if (currentAttemptSuccess && finalAnalysis !== "") {
+                        success = true; // Salimos de ambos bucles
+                    }
+                } catch (e) {
+                    if (e.name === 'AbortError') throw e; // Bubble up aborts
+                    lastError = e;
+                    currentAttemptSuccess = false;
+                    
+                    if (e.message === 'QUOTA') {
+                        console.warn(`Key ${k+1} agotada. Probando siguiente key...`);
+                        continue; // Prueba la siguiente llave
+                    } else if (e.message === 'MODEL_NOT_FOUND') {
+                        console.warn(`Modelo ${usedModel} no disponible. Probando siguiente modelo...`);
+                        break; // Rompe el loop de llaves, pasa al siguiente modelo
+                    } else {
+                        throw e; // Error fatal
+                    }
+                }
             }
-            finalAnalysis += textChunk;
-            finalFinishReason = finishReason;
-            
-            if (finishReason === 'MAX_TOKENS' && iterations < MAX_ITERATIONS) {
-                contents.push({ role: 'model', parts: [{ text: textChunk }] });
-                contents.push({ role: 'user', parts: [{ text: "Continúa el análisis exactamente donde te quedaste, de forma fluida, sin repetir el texto anterior." }] });
-            } else {
-                break;
-            }
+        }
+
+        if (!success) {
+            throw lastError || new Error("Fallaron todas las claves y modelos disponibles.");
         }
 
         predictionLoadingManager.finishAILoading();
@@ -1622,7 +1673,7 @@ Genera un análisis experto y exhaustivo. No tienes límite de palabras.`;
             teamB,
             probabilities: prediction,
             generatedAt: new Date().toISOString(),
-            model: GEMINI_MODEL,
+            model: usedModel,
             fromCache: false
         };
 
