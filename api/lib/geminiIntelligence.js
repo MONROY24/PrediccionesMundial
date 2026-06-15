@@ -1,6 +1,11 @@
-const GEMINI_MODEL = 'gemini-3.1-flash-lite';
+const GEMINI_MODELS = [
+    'gemini-3.5-flash',       // MODEL_PRIMARY
+    'gemini-2.5-flash',       // MODEL_FALLBACK
+    'gemini-3.1-flash-lite'   // MODEL_EMERGENCY
+];
 
 const PersistentGeminiCache = require('./persistentCache');
+const GeminiDiagnosticsEngine = require('./GeminiDiagnosticsEngine');
 
 function buildQuantitativePrompt(teamA, teamB) {
     return `Eres un Analista Profesional Cuantitativo de selecciones nacionales de fútbol.
@@ -100,6 +105,7 @@ function validateGeminiResponse(text, teamA, teamB) {
     }
 }
 
+const { GeminiReliabilityEngine, GeminiStatus } = require('./GeminiReliabilityEngine');
 const geminiKeyManager = require('./GeminiKeyManager');
 
 async function fetchQuantitativeFactors(teamA, teamB) {
@@ -108,23 +114,54 @@ async function fetchQuantitativeFactors(teamA, teamB) {
     const strictCacheKey = `quant_${teamA}_vs_${teamB}`;
     const cachedData = await PersistentGeminiCache.getCachedAnalysis(strictCacheKey);
     if (cachedData) {
+        GeminiDiagnosticsEngine.recordDiagnostic({
+            timestamp: new Date().toISOString(),
+            match: matchupName,
+            model: 'cached',
+            apiKeyIndex: -1,
+            responseTime: 0,
+            cacheHit: true,
+            cacheMiss: false,
+            retryCount: 0,
+            groundingUsed: false,
+            groundingSuccess: false,
+            status: 'SUCCESS'
+        }).catch(e => console.error(e));
         return cachedData;
     }
 
     const prompt = buildQuantitativePrompt(teamA, teamB);
     let useGrounding = true; // Intentar con Grounding primero
+    let currentModelIndex = 0;
 
-    let attempts = 0;
-    const maxAttempts = (geminiKeyManager.keys.length > 0 ? geminiKeyManager.keys.length : 1) * 2; // *2 para cubrir intentos con y sin Grounding
+    const result = await GeminiReliabilityEngine.executeGeminiRequest(async (attempt, lastStatus) => {
+        let keyObj = geminiKeyManager.getCurrentKey();
+        if (!keyObj) return null; // No hay claves
 
-    while (attempts < maxAttempts) {
-        const keyObj = geminiKeyManager.getCurrentKey();
-        
-        if (!keyObj) {
-            console.warn(`[Gemini Engine] No hay claves activas disponibles para ${matchupName}. Usando neutrales.`);
-            return validateGeminiResponse("{}", teamA, teamB);
+        if (lastStatus === GeminiStatus.MODEL_NOT_FOUND || lastStatus === GeminiStatus.COMPATIBILITY_ERROR) {
+            currentModelIndex++;
+            if (currentModelIndex >= GEMINI_MODELS.length) {
+                return null; // Ya probamos todos los modelos
+            }
+            console.warn(`[GeminiIntelligence] Fallo en modelo actual, cambiando a: ${GEMINI_MODELS[currentModelIndex]}`);
+        } else if (lastStatus === GeminiStatus.MODEL_ERROR || lastStatus === GeminiStatus.TIMEOUT) {
+            geminiKeyManager.recordError(keyObj, 'general');
+        } else if (lastStatus === GeminiStatus.QUOTA_EXCEEDED || lastStatus === GeminiStatus.RATE_LIMIT) {
+            if (useGrounding) {
+                useGrounding = false; // Fallback 1: quitar grounding
+            } else {
+                geminiKeyManager.recordError(keyObj, 'quota');
+                useGrounding = true;
+                currentModelIndex = 0; // Intentar con la nueva key desde el primer modelo
+                keyObj = geminiKeyManager.getCurrentKey();
+                if (!keyObj) return null;
+            }
+        } else if (lastStatus === GeminiStatus.INVALID_RESPONSE && useGrounding) {
+            useGrounding = false;
         }
 
+        const model = GEMINI_MODELS[currentModelIndex];
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${keyObj.value}`;
         const body = {
             contents: [{ role: 'user', parts: [{ text: prompt }] }],
             ...(useGrounding ? { tools: [{ googleSearch: {} }] } : {}),
@@ -138,106 +175,58 @@ async function fetchQuantitativeFactors(teamA, teamB) {
             }
         };
 
-        const url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${keyObj.value}`;
+        return { url, body, model, keyObj };
+    }, { MAX_RETRIES: 2, REQUEST_TIMEOUT_MS: 10000 });
 
-        try {
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body)
-            });
+    if (result.status === GeminiStatus.SUCCESS && result.text) {
+        if (result.keyObj) geminiKeyManager.recordSuccess(result.keyObj, result.latency);
+        const finalFactors = validateGeminiResponse(result.text, teamA, teamB);
+        finalFactors.sources = result.sources || [];
+        finalFactors.latency = result.latency || 0;
+        finalFactors.modelUsed = result.modelUsed;
+        finalFactors.toolsUsed = result.toolsUsed || [];
+        
+        // Guardar en caché asíncronamente
+        PersistentGeminiCache.setCachedAnalysis(strictCacheKey, finalFactors, 24).catch(e => console.error(e));
+        
+        GeminiDiagnosticsEngine.recordDiagnostic({
+            timestamp: new Date().toISOString(),
+            match: matchupName,
+            model: result.modelUsed || GEMINI_MODELS[0],
+            apiKeyIndex: geminiKeyManager.currentKeyIndex !== undefined ? geminiKeyManager.currentKeyIndex : -1,
+            responseTime: result.latency || 0,
+            cacheHit: false,
+            cacheMiss: true,
+            retryCount: 0,
+            groundingUsed: (result.toolsUsed || []).includes('googleSearch'),
+            groundingSuccess: (result.toolsUsed || []).includes('googleSearch'),
+            status: 'SUCCESS'
+        }).catch(e => console.error(e));
 
-            const data = await response.json();
-
-            if (!response.ok) {
-                const isQuotaError = response.status === 429 || 
-                                     String(response.status) === '429' ||
-                                     (data.error?.message?.toLowerCase().includes('quota')) ||
-                                     (data.error?.message?.toLowerCase().includes('exhausted')) ||
-                                     (data.error?.message?.toLowerCase().includes('rate limit'));
-
-                // 503 = modelo saturado → esperar y reintentar
-                const isOverloadError = response.status === 503 || 
-                                        (data.error?.message?.toLowerCase().includes('high demand')) ||
-                                        (data.error?.message?.toLowerCase().includes('overloaded')) ||
-                                        (data.error?.message?.toLowerCase().includes('temporarily unavailable'));
-
-                if (isOverloadError) {
-                    const waitMs = 2000 * (attempts + 1);
-                    console.warn(`[Gemini Engine] Modelo saturado (503) para ${matchupName}. Esperando ${waitMs}ms...`);
-                    await new Promise(r => setTimeout(r, waitMs));
-                    attempts++;
-                    continue; // Reintentar sin rotar key ni cambiar Grounding
-                }
-                     
-                if (isQuotaError) {
-                    if (useGrounding) {
-                        // Fallback: desactivar Grounding y reintentar con la MISMA key
-                        console.warn(`[Gemini Engine] Cuota con Grounding en key ${keyObj.display}. Reintentando sin Grounding...`);
-                        useGrounding = false;
-                        attempts++;
-                        continue;
-                    }
-                    // Sin Grounding también falla → rotar key
-                    console.warn(`[Gemini Engine] Cuota agotada en key ${keyObj.display}. Rotando...`);
-                    geminiKeyManager.markKeyAsFailed(keyObj);
-                    useGrounding = true; // Volver a intentar Grounding con la nueva key
-                    attempts++;
-                    continue;
-                } else {
-                    // Error distinto (ej: 400 Bad Request), no quemamos la clave
-                    console.warn(`[Gemini Engine] API Error (${response.status}): ${data.error?.message}. Usando neutrales para ${matchupName}.`);
-                    return validateGeminiResponse("{}", teamA, teamB);
-                }
-            }
-
-            const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
-            const finishReason = data.candidates?.[0]?.finishReason;
-
-            // MALFORMED_FUNCTION_CALL ocurre cuando Grounding y JSON mode coexisten.
-            // Desactivar Grounding y reintentar con la misma key.
-            if (!text && finishReason === 'MALFORMED_FUNCTION_CALL' && useGrounding) {
-                console.warn(`[Gemini Engine] MALFORMED_FUNCTION_CALL con Grounding en key ${keyObj.display}. Reintentando sin Grounding...`);
-                useGrounding = false;
-                attempts++;
-                continue;
-            }
-
-            if (!text) {
-                console.warn(`[Gemini Engine] Respuesta vacía de Gemini para ${matchupName} (razón: ${finishReason}). Usando neutrales.`);
-                return validateGeminiResponse("{}", teamA, teamB);
-            }
-
-            const finalFactors = validateGeminiResponse(text, teamA, teamB);
-            
-            // Extraer fuentes de Grounding
-            const groundingChunks = data.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
-            const sources = groundingChunks
-                .map(chunk => chunk.web?.uri)
-                .filter(Boolean);
-            
-            finalFactors.sources = sources;
-            
-            // Guardar en caché asíncronamente
-            PersistentGeminiCache.setCachedAnalysis(strictCacheKey, finalFactors, 24).catch(e => console.error(e));
-            
-            return finalFactors;
-
-        } catch (error) {
-            console.warn(`[Gemini Engine] Error crítico llamando a Gemini para ${matchupName} con clave ${keyObj.display}: ${error.message}.`);
-            // Error de red
-            attempts++;
-            geminiKeyManager.rotateKey(); 
-        }
+        return finalFactors;
     }
 
-    console.warn(`[Gemini Engine] Todos los reintentos (${maxAttempts}) fallaron para ${matchupName}. Usando neutrales.`);
+    console.warn(`[Gemini Engine] Fallo al obtener factores para ${matchupName} (Estado final: ${result.status}). Usando neutrales.`);
+    
+    GeminiDiagnosticsEngine.recordDiagnostic({
+        timestamp: new Date().toISOString(),
+        match: matchupName,
+        model: result.modelUsed || GEMINI_MODELS[0],
+        apiKeyIndex: geminiKeyManager.currentKeyIndex !== undefined ? geminiKeyManager.currentKeyIndex : -1,
+        responseTime: result.latency || 0,
+        cacheHit: false,
+        cacheMiss: true,
+        retryCount: 0,
+        groundingUsed: (result.toolsUsed || []).includes('googleSearch'),
+        groundingSuccess: false,
+        status: result.status || 'ERROR'
+    }).catch(e => console.error(e));
+
     return validateGeminiResponse("{}", teamA, teamB);
 }
 
 module.exports = {
     fetchQuantitativeFactors,
-    intelligenceCache,
     sanitizeGeminiFactors,
     validateGeminiResponse
 };

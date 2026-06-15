@@ -345,8 +345,140 @@ function updateTeamDisplay(side) {
 }
 
 // ============================================================
-// PREDICCIÓN DE PARTIDO
+// PREDICCIÓN DE PARTIDO Y LOADING MANAGER
 // ============================================================
+
+class PredictionLoadingManager {
+    constructor() {
+        this.MATH_TIMEOUT = 5000;
+        this.GEMINI_TIMEOUT = 10000;
+        this.mathTimeoutId = null;
+        this.aiTimeoutId = null;
+        this.aiProgressInterval = null;
+        this.mathProgressInterval = null;
+    }
+
+    startMathLoading(btn) {
+        this.origBtnHtml = btn.innerHTML;
+        btn.innerHTML = '<span class="spinner"></span> Calculando...';
+        btn.disabled = true;
+
+        return new Promise((resolve, reject) => {
+            this.mathTimeoutId = setTimeout(() => {
+                this.restoreMathBtn(btn);
+                reject(new Error("El motor matemático excedió el tiempo límite (5s)."));
+            }, this.MATH_TIMEOUT);
+            resolve();
+        });
+    }
+
+    finishMathLoading(btn) {
+        if (this.mathTimeoutId) clearTimeout(this.mathTimeoutId);
+        this.restoreMathBtn(btn);
+    }
+
+    restoreMathBtn(btn) {
+        if (this.origBtnHtml) btn.innerHTML = this.origBtnHtml;
+        btn.disabled = false;
+    }
+
+    startAILoading(teamA, teamB, prediction) {
+        const container = document.getElementById('ai-analysis-content');
+        if (!container) return;
+
+        const dataA = WORLD_CUP_DATA?.teams[teamA];
+        const dataB = WORLD_CUP_DATA?.teams[teamB];
+
+        container.innerHTML = `
+            <div class="ai-match-header">
+                <div class="ai-team-badge">${dataA?.flagHtml || '🏳️'} <strong>${teamA}</strong></div>
+                <div class="ai-prob-trio">
+                    <div class="ai-prob-item win-a">
+                        <div class="ai-prob-pct">${prediction.winA}%</div>
+                        <div class="ai-prob-lbl">Victoria</div>
+                    </div>
+                    <div class="ai-prob-item draw-v">
+                        <div class="ai-prob-pct">${prediction.draw}%</div>
+                        <div class="ai-prob-lbl">Empate</div>
+                    </div>
+                    <div class="ai-prob-item win-b">
+                        <div class="ai-prob-pct">${prediction.winB}%</div>
+                        <div class="ai-prob-lbl">Victoria</div>
+                    </div>
+                </div>
+                <div class="ai-team-badge"><strong>${teamB}</strong> ${dataB?.flagHtml || '🏳️'}</div>
+            </div>
+            <div class="ai-score-chip">⚽ Marcador más probable: <strong>${prediction.mostLikelyScore}</strong></div>
+            <div class="ai-loading-state" id="ai-loading-state-container">
+                <div class="ai-spinner-wrap">
+                    <img src="MR24.png" alt="Cargando" class="ai-custom-logo" />
+                    <div class="ai-loading-text" id="ai-loading-text-main">Iniciando simulación...</div>
+                    <div class="ai-loading-sub" id="ai-loading-text-sub">Preparando motor estocástico</div>
+                </div>
+            </div>
+        `;
+
+        // Flujo visual informativo progresivo
+        const steps = [
+            { t: 0, main: "Ejecutando simulación Monte Carlo...", sub: "Procesando métricas Poisson-Dixon-Coles" },
+            { t: 2000, main: "Inicializando motor de Inteligencia Artificial...", sub: "Estableciendo conexión segura" },
+            { t: 4000, main: "Construyendo análisis táctico...", sub: "Generando explicación detallada" },
+            { t: 7000, main: "Finalizando análisis experto...", sub: "Casi listo..." }
+        ];
+
+        let currentStep = 0;
+        this.aiProgressInterval = setInterval(() => {
+            currentStep++;
+            const step = steps.find(s => s.t === currentStep * 1000);
+            if (step) {
+                const mainEl = document.getElementById('ai-loading-text-main');
+                const subEl = document.getElementById('ai-loading-text-sub');
+                if (mainEl && subEl) {
+                    mainEl.textContent = step.main;
+                    subEl.textContent = step.sub;
+                }
+            }
+        }, 1000);
+
+        // Disparar progreso inicial
+        steps[0].t = -1; // forzar update inmediato
+        const mainEl = document.getElementById('ai-loading-text-main');
+        const subEl = document.getElementById('ai-loading-text-sub');
+        if (mainEl && subEl) {
+            mainEl.textContent = steps[0].main;
+            subEl.textContent = steps[0].sub;
+        }
+
+        // Timeout estricto del frontend de 10s
+        this.aiTimeoutId = setTimeout(() => {
+            this.showAIFallback();
+        }, this.GEMINI_TIMEOUT);
+    }
+
+    finishAILoading() {
+        if (this.aiTimeoutId) clearTimeout(this.aiTimeoutId);
+        if (this.aiProgressInterval) clearInterval(this.aiProgressInterval);
+    }
+
+    showAIFallback(errorMsg = null) {
+        this.finishAILoading();
+        const container = document.getElementById('ai-loading-state-container');
+        if (!container) return;
+
+        container.innerHTML = `
+            <div style="text-align:center; padding: 2rem;">
+                <div style="font-size:3rem;margin-bottom:1rem">🧮</div>
+                <h3 style="color:var(--text-primary);margin-bottom:0.5rem">Análisis IA no disponible</h3>
+                <p style="color:var(--text-muted);font-size:0.9rem;max-width:400px;margin:0 auto">
+                    ${errorMsg || 'El servicio de IA ha excedido el tiempo de espera (10s).'}<br><br>
+                    <strong>Utilizando modelo matemático.</strong> Las probabilidades mostradas arriba son 100% precisas y generadas por el motor estocástico local.
+                </p>
+            </div>
+        `;
+    }
+}
+
+const predictionLoadingManager = new PredictionLoadingManager();
 async function runPrediction() {
     const teamA = document.getElementById('teamA-select').value;
     const teamB = document.getElementById('teamB-select').value;
@@ -354,47 +486,70 @@ async function runPrediction() {
     if (teamA === teamB)  { showAlert('Selecciona equipos diferentes'); return; }
 
     const btn  = document.getElementById('predictBtn');
-    const orig = btn.innerHTML;
-    btn.innerHTML = '<span class="spinner"></span> Calculando...';
-    btn.disabled  = true;
-
-    await delay(50);
 
     try {
-        const currentModel = document.getElementById('singleMatchModel')?.value || 'standard';
-        engine.modelType   = currentModel;
+        await predictionLoadingManager.startMathLoading(btn);
+        await delay(50); // Dar respiro al thread
 
+        const currentModel = document.getElementById('singleMatchModel')?.value || 'standard';
+        
         // ── FASE 7: Aplicar factores contextuales si están configurados ──
         const contextFactors = getContextualFactors();
         applyContextualEloAdjustment(teamA, teamB, contextFactors);
 
-        const result = engine.predictMatch(teamA, teamB);
+        const payload = {
+            teamA: { ...WORLD_CUP_DATA.teams[teamA], name: teamA },
+            teamB: { ...WORLD_CUP_DATA.teams[teamB], name: teamB },
+            options: { bypassCache: false }
+        };
+
+        const response = await fetch('/api/predict', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+
+        const result = await response.json();
 
         // Revertir ajustes contextuales (no persistir cambios en los datos base)
         revertContextualEloAdjustment(teamA, teamB);
 
-        if (result.error) throw new Error(result.error);
+        if (!response.ok || result.error) throw new Error(result.error || 'Error en servidor de predicción');
 
         // Guardar predicción en ResultsManager para evaluación posterior
-        if (resultsManager) {
+        if (typeof resultsManager !== 'undefined' && resultsManager) {
             resultsManager.savePrediction(teamA, teamB, result);
         }
 
         // Guardar predicción actual para el análisis IA
         _currentPredictionForAI = { teamA, teamB, result, contextFactors };
 
-        const comparison = engine.compareTeams(teamA, teamB);
+        const teamAData = WORLD_CUP_DATA.teams[teamA];
+        const teamBData = WORLD_CUP_DATA.teams[teamB];
+        const comparison = {
+            prediction: result,
+            comparison: {
+                fifaRanking:     { a: teamAData.fifaRanking,                       b: teamBData.fifaRanking,                       winner: teamAData.fifaRanking < teamBData.fifaRanking ? teamA : teamB },
+                eloRating:       { a: teamAData.eloRating,                         b: teamBData.eloRating,                         winner: teamAData.eloRating   > teamBData.eloRating   ? teamA : teamB },
+                worldCupTitles:  { a: teamAData.worldCupTitles,                    b: teamBData.worldCupTitles,                    winner: teamAData.worldCupTitles > teamBData.worldCupTitles ? teamA : teamB },
+                squadValue:      { a: teamAData.squadValue,                        b: teamBData.squadValue,                        winner: teamAData.squadValue  > teamBData.squadValue  ? teamA : teamB },
+                avgGoalsScored:  { a: teamAData.teamStats?.avgGoalsScored  || 1.3,  b: teamBData.teamStats?.avgGoalsScored  || 1.3,  winner: (teamAData.teamStats?.avgGoalsScored  || 0) > (teamBData.teamStats?.avgGoalsScored  || 0) ? teamA : teamB },
+                avgPenaltyRating:{ a: teamAData.teamStats?.avgPenaltyRating || 60,  b: teamBData.teamStats?.avgPenaltyRating || 60,  winner: (teamAData.teamStats?.avgPenaltyRating|| 0) > (teamBData.teamStats?.avgPenaltyRating|| 0) ? teamA : teamB },
+                strength:        { a: result.strengthA,                          b: result.strengthB,                          winner: result.strengthA > result.strengthB ? teamA : teamB }
+            }
+        };
         displayPrediction(result, comparison);
 
-        // ── FASE 8-9: Lanzar análisis Gemini automáticamente ──
-        triggerAIAnalysis(teamA, teamB, result, contextFactors);
+        // Terminar carga del botón
+        predictionLoadingManager.finishMathLoading(btn);
+
+        // ── FASE 8-9: Mostrar análisis Gemini (ya fue ejecutado en backend) ──
+        displayAIAnalysis(result.geminiAnalysis, result.aiContribution > 0, result.modelUsed);
 
     } catch (err) {
         console.error(err);
+        predictionLoadingManager.restoreMathBtn(btn);
         showAlert('Error en la predicción: ' + err.message);
-    } finally {
-        btn.innerHTML = orig;
-        btn.disabled  = false;
     }
 }
 
@@ -1350,231 +1505,28 @@ function revertContextualEloAdjustment(teamA, teamB) {
 // ============================================================
 
 /**
- * Lanza el análisis Gemini en background tras una predicción.
- * Siempre muestra el tab de IA disponible; el análisis llega de forma asíncrona.
+ * Muestra el análisis de la IA que fue retornado por el backend.
  */
-async function triggerAIAnalysis(teamA, teamB, prediction, contextFactors = {}) {
-    // Generar clave de cache (añadimos versión para ignorar caches viejos de memoria)
-    const cacheKey = `v2_${teamA}_${teamB}_${prediction.winA}`;
-
-    // Preparar el tab de IA para mostrar loading
+function displayAIAnalysis(analysisText, isAI, modelUsed) {
     const aiSection = document.getElementById('section-ai-analysis');
     if (aiSection) {
-        showAILoading(teamA, teamB, prediction);
-        // Activar el badge del tab
+        // Limpiamos los loaders
+        predictionLoadingManager.finishAILoading();
+        
         const aiTab = document.querySelector('[data-tab="ai-analysis"]');
-        if (aiTab) aiTab.classList.add('tab-new-data');
-    }
-
-    // Si ya tenemos análisis en cache, usarlo
-    if (_aiAnalysisCache[cacheKey]) {
-        renderAIAnalysis(_aiAnalysisCache[cacheKey]);
-        return;
-    }
-
-    // Cancelar petición anterior si existe
-    if (_aiAnalysisAbort) _aiAnalysisAbort.abort();
-    _aiAnalysisAbort = new AbortController();
-
-    try {
-        // ─────────────────────────────────────────────────────────────────────
-        // ARQUITECTURA CLIENTE-SIDE: El loop de Gemini corre en el NAVEGADOR.
-        // Esto evita el timeout de 10s de Vercel Hobby.
-        // El servidor solo se usa como túnel seguro para obtener la API Key.
-        // ─────────────────────────────────────────────────────────────────────
-
-        // Construir factores contextuales
-        const contextualDesc = {};
-        if (contextFactors.teamA?.injuredStars > 0)
-            contextualDesc[`Lesiones ${teamA}`] = `${contextFactors.teamA.injuredStars} jugador(es) clave`;
-        if (contextFactors.teamB?.injuredStars > 0)
-            contextualDesc[`Lesiones ${teamB}`] = `${contextFactors.teamB.injuredStars} jugador(es) clave`;
-        if (contextFactors.altitude)
-            contextualDesc['Altitud'] = 'Sede a >2000m — desventaja visitante';
-
-        const ctxStr = Object.entries(contextualDesc).filter(([,v])=>v).map(([k,v])=>`- ${k}: ${v}`).join('\n');
-        const { lambdaA, lambdaB, topScores = [], eloDiff, winA, winB, draw, over25, btts } = prediction;
-        const topScoresText = topScores.slice(0,5).map(s=>`${s.score}(${s.probability}%)`).join(' | ');
-        const eloStr = eloDiff > 0 ? `${teamA} superior por ${Math.abs(eloDiff)} pts ELO`
-                     : eloDiff < 0 ? `${teamB} superior por ${Math.abs(eloDiff)} pts ELO`
-                     : 'Equipos parejos en ELO';
-
-        const prompt = `Eres un analista deportivo experto del Mundial FIFA 2026. Escribe ÚNICAMENTE en español usando formato markdown profesional.
-
-## DATOS DEL PARTIDO
-- **Enfrentamiento:** ${teamA} vs ${teamB}
-- **Probabilidades:** ${teamA} ${winA}% | Empate ${draw}% | ${teamB} ${winB}%
-- **Goles esperados:** λ${teamA}=${lambdaA} | λ${teamB}=${lambdaB} | Total=${(parseFloat(lambdaA)+parseFloat(lambdaB)).toFixed(2)}
-- **ELO:** ${eloStr}
-- **Marcadores más probables:** ${topScoresText}
-- **Over 2.5:** ${over25}% | **BTTS:** ${btts}%
-${ctxStr ? `\n### Factores contextuales\n${ctxStr}` : ''}
-
-## INSTRUCCIONES
-Escribe un análisis exhaustivo con estas secciones en orden exacto:
-
-### 1. Contexto Histórico y Rivalidad
-### 2. Situación Actual y Novedades (lesiones, sanciones, forma reciente)
-### 3. Análisis Táctico (fortalezas y debilidades de cada equipo)
-### 4. Interpretación Estadística (probabilidades Poisson y modelo matemático)
-### 5. Predicción Final
-
-Sé muy detallado en cada sección. Comienza directamente con la sección 1 sin introducción previa.`;
-
-        const keyRes = await fetch('/api/status?type=key', { signal: _aiAnalysisAbort.signal });
-        const keyData = await keyRes.json();
-        if (!keyRes.ok) throw new Error(keyData.error || 'Error obteniendo API Key');
-        let GEMINI_API_KEY = keyData.key;
-        const GEMINI_MODEL   = 'gemini-3.1-flash-lite';
-
-        let url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
-
-        let contents         = [{ role: 'user', parts: [{ text: prompt }] }];
-        let finalAnalysis    = '';
-        let finalFinishReason= 'STOP';
-        let totalChars       = 0;
-        let iterations       = 0;
-        const MAX_ITERATIONS = 6; // Sin límite de Vercel → podemos hacer más iteraciones
-
-        while (iterations < MAX_ITERATIONS) {
-            iterations++;
-
-            const geminiReqBody = {
-                contents,
-                tools: [{ googleSearch: {} }],
-                generationConfig: {
-                    temperature: 0.75,
-                    topK: 40,
-                    topP: 0.95,
-                    maxOutputTokens: 8192
-                },
-                safetySettings: [
-                    { category: 'HARM_CATEGORY_HARASSMENT',        threshold: 'BLOCK_NONE' },
-                    { category: 'HARM_CATEGORY_HATE_SPEECH',       threshold: 'BLOCK_NONE' },
-                    { category: 'HARM_CATEGORY_SEXUALLY_EXPLICIT', threshold: 'BLOCK_NONE' },
-                    { category: 'HARM_CATEGORY_DANGEROUS_CONTENT', threshold: 'BLOCK_NONE' }
-                ]
-            };
-
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(geminiReqBody),
-                signal: _aiAnalysisAbort.signal
-            });
-
-            const data = await response.json();
-
-            if (!response.ok) {
-                const errMsg = data.error?.message || `HTTP ${response.status}`;
-                if (response.status === 429 || errMsg.includes('quota') || errMsg.includes('RESOURCE_EXHAUSTED')) {
-                    console.warn(`Cuota agotada en la clave actual. Esperando 5s y solicitando rotación...`);
-                    await new Promise(r => setTimeout(r, 5000)); // Sleep de 5s para darle respiro a la API
-                    
-                    const rotRes = await fetch(`/api/status?type=key&failedKey=${encodeURIComponent(GEMINI_API_KEY)}`, { signal: _aiAnalysisAbort.signal });
-                    const rotData = await rotRes.json();
-                    if (!rotRes.ok) {
-                        throw new Error(`Cuota de Gemini agotada en TODAS las claves. Intenta en 1 minuto.`);
-                    }
-                    console.log(`Rotación exitosa. Reintentando con nueva clave...`);
-                    GEMINI_API_KEY = rotData.key;
-                    url = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
-                    iterations--; // Reintentar la misma iteración
-                    continue;
-                }
-                if (response.status === 503) {
-                    // Esperar 3s y reintentar una vez más
-                    if (iterations < 3) {
-                        await new Promise(r => setTimeout(r, 3000));
-                        iterations--; // No contar este intento
-                        continue;
-                    }
-                }
-                throw new Error(`Gemini API Error: ${errMsg}`);
-            }
-
-            const textChunk  = data.candidates?.[0]?.content?.parts?.[0]?.text;
-            const finishReason = data.candidates?.[0]?.finishReason;
-
-            if (!textChunk) {
-                if (finalAnalysis === '') throw new Error(`Gemini no generó texto. Razón: ${finishReason || 'desconocida'}`);
-                break; // Fin natural sin texto extra
-            }
-
-            finalAnalysis    += textChunk;
-            totalChars       += textChunk.length;
-            finalFinishReason = finishReason;
-
-            // Actualizar debug badge en tiempo real
-            const dbgEl = document.getElementById('ai-debug-badge');
-            if (dbgEl) dbgEl.textContent = `[Debug: ${finishReason} | ${totalChars} chars | iter ${iterations}]`;
-
-            if (finishReason === 'MAX_TOKENS' && iterations < MAX_ITERATIONS) {
-                // Continuar desde donde se cortó — SIN repetir título ni intro
-                contents.push({ role: 'model', parts: [{ text: textChunk }] });
-                contents.push({ role: 'user', parts: [{ text: 'Continúa exactamente desde donde cortaste, sin repetir nada de lo anterior.' }] });
-            } else {
-                break; // STOP u otra razón → terminó
-            }
-        }
-
-        const resultData = {
-            success: true,
-            analysis: finalAnalysis,
-            finishReason: finalFinishReason + ` (${iterations} iter, ${totalChars} chars)`,
-            teamA, teamB,
-            probabilities: prediction,
-            generatedAt: new Date().toISOString(),
-            model: GEMINI_MODEL,
-            isCached: false
+        if (aiTab && isAI) aiTab.classList.add('tab-new-data');
+        
+        const data = {
+            analysis: analysisText,
+            model: modelUsed,
+            generatedAt: new Date().toISOString()
         };
-
-        _aiAnalysisCache[cacheKey] = resultData;
-        renderAIAnalysis(resultData);
-
-    } catch (err) {
-        if (err.name === 'AbortError') return;
-        showAIError(err.message, teamA, teamB, prediction, contextFactors);
+        
+        renderAIAnalysis(data);
     }
 }
 
-/** Muestra estado de carga del análisis IA */
-function showAILoading(teamA, teamB, prediction) {
-    const container = document.getElementById('ai-analysis-content');
-    if (!container) return;
 
-    const dataA = WORLD_CUP_DATA?.teams[teamA];
-    const dataB = WORLD_CUP_DATA?.teams[teamB];
-
-    container.innerHTML = `
-        <div class="ai-match-header">
-            <div class="ai-team-badge">${dataA?.flagHtml || '🏳️'} <strong>${teamA}</strong></div>
-            <div class="ai-prob-trio">
-                <div class="ai-prob-item win-a">
-                    <div class="ai-prob-pct">${prediction.winA}%</div>
-                    <div class="ai-prob-lbl">Victoria</div>
-                </div>
-                <div class="ai-prob-item draw-v">
-                    <div class="ai-prob-pct">${prediction.draw}%</div>
-                    <div class="ai-prob-lbl">Empate</div>
-                </div>
-                <div class="ai-prob-item win-b">
-                    <div class="ai-prob-pct">${prediction.winB}%</div>
-                    <div class="ai-prob-lbl">Victoria</div>
-                </div>
-            </div>
-            <div class="ai-team-badge"><strong>${teamB}</strong> ${dataB?.flagHtml || '🏳️'}</div>
-        </div>
-        <div class="ai-score-chip">⚽ Marcador más probable: <strong>${prediction.mostLikelyScore}</strong></div>
-        <div class="ai-loading-state">
-            <div class="ai-spinner-wrap">
-                <img src="MR24.png" alt="Cargando" class="ai-custom-logo" />
-                <div class="ai-loading-text">Gemini está analizando el partido...</div>
-                <div class="ai-loading-sub">Procesando datos del motor Poisson-Dixon-Coles</div>
-            </div>
-        </div>
-    `;
-}
 
 /** Renderiza el análisis de Gemini como HTML formateado */
 function renderAIAnalysis(data) {
@@ -1621,25 +1573,10 @@ function renderAIAnalysis(data) {
     const debugTag = data.finishReason ? `<span style="font-size:0.75rem; color: #ffb74d; margin-left:10px;">[Debug: ${data.finishReason} | ${analysis.length} chars]</span>` : '';
 
     container.innerHTML = `
-        <div class="ai-match-header">
-            <div class="ai-team-badge">${dataA?.flagHtml || '🏳️'} <strong>${teamA}</strong></div>
-            <div class="ai-prob-trio">
-                <div class="ai-prob-item win-a">
-                    <div class="ai-prob-pct">${probabilities?.winA ?? '—'}%</div>
-                    <div class="ai-prob-lbl">Victoria</div>
-                </div>
-                <div class="ai-prob-item draw-v">
-                    <div class="ai-prob-pct">${probabilities?.draw ?? '—'}%</div>
-                    <div class="ai-prob-lbl">Empate</div>
-                </div>
-                <div class="ai-prob-item win-b">
-                    <div class="ai-prob-pct">${probabilities?.winB ?? '—'}%</div>
-                    <div class="ai-prob-lbl">Victoria</div>
-                </div>
-            </div>
-            <div class="ai-team-badge"><strong>${teamB}</strong> ${dataB?.flagHtml || '🏳️'}</div>
+        <div class="ai-match-header" style="display: none;">
+            <!-- Ya mostramos esto en main, lo ocultamos aquí por rediseño -->
         </div>
-        <div class="ai-score-chip">⚽ Marcador más probable: <strong>${probabilities?.mostLikelyScore || '—'}</strong></div>
+        <div class="ai-score-chip" style="margin-top: 10px;">⚽ Análisis de Contexto:</div>
         <div class="ai-meta-row">
             <span class="ai-model-badge">🤖 ${model || 'gemini-2.0-flash'}</span>
             ${timeStr ? `<span class="ai-time-badge">🕐 ${timeStr}</span>` : ''}
@@ -1656,27 +1593,3 @@ function renderAIAnalysis(data) {
     if (aiTab) aiTab.classList.remove('tab-new-data');
 }
 
-/** Muestra estado de error con botón de reintento */
-function showAIError(errorMsg, teamA, teamB, prediction, contextFactors) {
-    const container = document.getElementById('ai-analysis-content');
-    if (!container) return;
-
-    const isNoKey = errorMsg?.includes('MISSING_API_KEY') || errorMsg?.includes('no configurado');
-
-    container.innerHTML = `
-        <div class="ai-error-state">
-            <div style="font-size:3rem;margin-bottom:1rem">${isNoKey ? '🔑' : '⚠️'}</div>
-            <h3>${isNoKey ? 'Análisis IA no configurado' : 'Error al generar análisis'}</h3>
-            <p style="color:var(--text-muted);font-size:0.9rem;max-width:500px;margin:0.5rem auto 1.5rem">
-                ${isNoKey
-                    ? 'La variable GEMINI_API_KEY no está configurada en Vercel. Consulta DEPLOY.md para instrucciones.'
-                    : `${errorMsg || 'Error desconocido'}. El servidor Gemini puede estar temporalmente no disponible.`
-                }
-            </p>
-            ${!isNoKey ? `
-            <button class="predict-btn" onclick="triggerAIAnalysis('${teamA}', '${teamB}', _currentPredictionForAI?.result || {}, {})" style="max-width:200px">
-                🔄 Reintentar
-            </button>` : ''}
-        </div>
-    `;
-}
